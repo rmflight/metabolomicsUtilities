@@ -37,7 +37,7 @@ create_value <- function(mantissa, exponent){
 #'
 #' @export
 #' @return matrix
-log_transform <- function(data_matrix, min_value = NULL, order_mag = 3, log_fun = log){
+log_with_min <- function(data_matrix, min_value = NULL, order_mag = 3, log_fun = log){
   stopifnot(class(data_matrix) != "matrix")
   stopifnot(class(data_matrix) != "numeric")
 
