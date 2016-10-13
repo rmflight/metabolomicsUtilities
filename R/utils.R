@@ -16,7 +16,7 @@ xlsx_to_json <- function(in_xlsx, save_loc){
 
   names(xl_data)[1:2] <- c("ObservedMZ", "Intensity")
   xl_data <- dplyr::select_(xl_data, "ObservedMZ", "Intensity")
-  xl_data <- dplyr::filter_(xl_data, !is.na("ObservedMZ"))
+  xl_data <- dplyr::filter_(xl_data, "!is.na(ObservedMZ)")
 
   json_data <- SIRM.FTMS.peakPickingMethods::peak_list_2_json(xl_data)
   out_json <- file.path(save_loc, sub("xlsx", "json", basename(in_xlsx)))
