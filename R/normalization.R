@@ -38,8 +38,8 @@ create_value <- function(mantissa, exponent){
 #' @export
 #' @return matrix
 log_with_min <- function(data_matrix, min_value = NULL, order_mag = 3, log_fun = log){
-  stopifnot(class(data_matrix) != "matrix")
-  stopifnot(class(data_matrix) != "numeric")
+  stopifnot(class(data_matrix) == "matrix")
+  #stopifnot(class(data_matrix) == "numeric")
 
   if (min(data_matrix) < 0) {
     stop("Values less than zero detected, aborting!")
