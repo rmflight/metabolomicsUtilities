@@ -4,10 +4,10 @@
 \alias{log_with_min}
 \title{log-transform data}
 \usage{
-log_with_min(data_matrix, min_value = NULL, order_mag = 3, log_fun = log)
+log_with_min(data, min_value = NULL, order_mag = 3, log_fun = log)
 }
 \arguments{
-\item{data_matrix}{the data to work with}
+\item{data}{the data to work with}
 
 \item{min_value}{the minimum value}
 
