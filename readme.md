@@ -10,6 +10,7 @@ To install this package, use `devtools`.
 git clone https://gitlab.cesb.uky.edu/rmflight/metabolomicsUtilities
 cd metabolomicsUtilities
 R
+BiocInstaller::biocLite("IRanges")
 devtools::install()
 ```
 
