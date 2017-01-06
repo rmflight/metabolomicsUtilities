@@ -11,7 +11,7 @@
 #' @export
 #'
 #' @return IRanges
-mz_to_iranges <- function(mz_values, multi_factor = 10000){
+mz_to_iranges <- function(mz_values, multi_factor = 10000000){
   if (is.null(dim(mz_values))) {
     mz_ranges <- IRanges::IRanges(start = mz_values * multi_factor, width = 1)
   } else {
