@@ -72,8 +72,8 @@ class_from_feature <- function(data, in_column = "feature", new_column = "class"
 #' @importFrom stringr str_detect
 #'
 check_feature_class <- function(data, feature_column = "feature", class_column = "class"){
-  feature_data <- data[[feature_column]]
-  class_data <- data[[class_column]]
+  feature_data <- as.character(data[[feature_column]])
+  class_data <- as.character(data[[class_column]])
 
   class_in_feature <- stringr::str_detect(feature_data, class_data)
 
