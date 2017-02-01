@@ -4,7 +4,7 @@
 \alias{mz_to_iranges}
 \title{mz ranges to IRanges}
 \usage{
-mz_to_iranges(mz_values, multi_factor = 10000)
+mz_to_iranges(mz_values, multi_factor = 1e+07)
 }
 \arguments{
 \item{mz_values}{either a vector or matrix of single or double ranges}
