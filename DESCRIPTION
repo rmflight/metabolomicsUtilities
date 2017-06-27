@@ -7,7 +7,7 @@ Authors@R: person("Robert", "Flight", , "rflight79@gmail.com", role =
 Date: 2017-02-01
 Description: More about what it does (maybe more than one line) Use
         four spaces when indenting paragraphs within the Description.
-Imports: IRanges, broom
+Imports: IRanges, broom, stringr, assertthat, stats
 License: BSD
 Encoding: UTF-8
 LazyData: true
