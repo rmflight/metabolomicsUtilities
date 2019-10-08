@@ -35,4 +35,3 @@ data <- data.frame(feature = c("FA.15.0.15...NH4.C15H30O2..pos", "FA.16.2.16...N
 data <- class_from_feature(data)
 
 }
-

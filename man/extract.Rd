@@ -17,4 +17,3 @@ Often we want to transform a number into it's exponential representation,
 having the number itself and the number of decimal places. This function
 provides that functionality
 }
-

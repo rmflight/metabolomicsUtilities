@@ -21,4 +21,3 @@ data.frame
 \description{
 matrix t-test
 }
-

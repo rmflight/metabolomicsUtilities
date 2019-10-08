@@ -17,4 +17,3 @@ check_feature_class(data, feature_column = "feature",
 \description{
 runs a check that the class can actually be found in the feature
 }
-

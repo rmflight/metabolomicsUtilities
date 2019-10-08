@@ -62,6 +62,7 @@ log_with_min <- function(data, min_value = NULL, order_mag = 3, log_fun = log){
 #'
 #' @param zip_file the zip file for a sample
 #'
+#' @export
 #' @return data.frame
 #' @importFrom FTMS.peakCharacterization zip_ms
 mu_peak_intensity = function(zip_file){

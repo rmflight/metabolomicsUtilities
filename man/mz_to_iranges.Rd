@@ -19,4 +19,3 @@ modifies a matrix of m/z ranges into an IRanges object to calculate
 overlaps. Because IRanges objects are integer based, also multiplies
 by a factor (default 10,000) to preserve resolution.
 }
-
