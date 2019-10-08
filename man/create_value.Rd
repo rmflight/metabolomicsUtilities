@@ -17,4 +17,3 @@ numeric
 \description{
 given a mantissa and exponent, returns the actual value as a numeric
 }
-

@@ -19,4 +19,3 @@ data.frame
 \description{
 runs t-tests on a vector, with classes of the vector supplied.
 }
-

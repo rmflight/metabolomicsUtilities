@@ -14,4 +14,3 @@ xlsx_to_json(in_xlsx, save_loc)
 \description{
 converts an XLSX peak list from Xcalibur to a json peak format.
 }
-

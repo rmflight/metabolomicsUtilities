@@ -10,4 +10,3 @@
 We rexport the %within% function from IRanges so it can be used by others
 in this package.
 }
-

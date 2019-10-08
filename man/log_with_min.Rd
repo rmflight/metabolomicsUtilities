@@ -22,4 +22,3 @@ matrix
 performs a log-transform while adding a small value to the data based on
 finding the smallest non-zero value in the data
 }
-
