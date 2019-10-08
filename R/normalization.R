@@ -57,3 +57,20 @@ log_with_min <- function(data, min_value = NULL, order_mag = 3, log_fun = log){
   log_data <- log_fun(out_data)
   log_data
 }
+
+#' return all peak heights
+#'
+#' @param zip_file the zip file for a sample
+#'
+#' @return data.frame
+#' @importFrom FTMS.peakCharacterization zip_ms
+mu_peak_intensity = function(zip_file){
+  tmp_zip = zip_ms(zip_file)
+  tmp_zip$load_peak_finder()
+  tmp_zip$cleanup()
+  sample_id = tmp_zip$id
+  all_intensity = data.frame(intensity = tmp_zip$peak_finder$peak_regions$peak_data$Height,
+                             sample = sample_id,
+                             stringsAsFactors = FALSE)
+  all_intensity
+}
