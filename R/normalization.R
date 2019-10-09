@@ -91,3 +91,32 @@ mu_calc_normalization = function(intensity_df){
   medians = purrr::map_dbl(split_sample, median, na.rm = TRUE)
   return(medians)
 }
+
+#' apply normalization
+#'
+#' Apply normalization to a matrix of intensities. This uses division, so
+#' if you had something logged, you would want to do the exponent first.
+#'
+#' @param intensity_matrix matrix of intensities, rows are entries, columns are samples
+#' @param normalization_factors named vector of normalization factors
+#'
+#' @export
+#' @return matrix
+mu_apply_normalization = function(intensity_matrix, normalization_factors){
+  match_names = base::intersect(colnames(intensity_matrix), names(normalization_factors))
+  other_names = setdiff(colnames(intensity_matrix), names(normalization_factors))
+
+  if (length(other_names) > 0) {
+    warning("Some sample names are missing, these samples will be normalized using a value of 1!")
+
+    other_factors = rep(1, length(other_names))
+    names(other_factors) = other_names
+    normalization_factors = c(normalization_factors, other_factors)
+  }
+  normalization_factors = normalization_factors[colnames(intensity_matrix)]
+
+  normalization_matrix = matrix(normalization_factors, nrow = nrow(intensity_matrix),
+                                ncol = length(normalization_factors), byrow = TRUE)
+  normalized_matrix = intensity_matrix / normalization_matrix
+  normalized_matrix
+}
