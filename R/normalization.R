@@ -75,3 +75,19 @@ mu_peak_intensity = function(zip_file){
                              stringsAsFactors = FALSE)
   all_intensity
 }
+
+#' calculate sample normalization
+#'
+#' Given a set of peak intensities, calculate normalization factors using
+#' the log-median of the intensities.
+#'
+#' @param intensity_df the data.frame of intensities
+#'
+#' @export
+#' @return data.frame
+mu_calc_normalization = function(intensity_df){
+  split_sample = split(intensity_df$intensity, intensity_df$sample)
+
+  medians = purrr::map_dbl(split_sample, median, na.rm = TRUE)
+  return(medians)
+}
