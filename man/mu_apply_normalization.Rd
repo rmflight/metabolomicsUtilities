@@ -4,7 +4,8 @@
 \alias{mu_apply_normalization}
 \title{apply normalization}
 \usage{
-mu_apply_normalization(intensity_matrix, normalization_factors)
+mu_apply_normalization(intensity_matrix, normalization_factors,
+  transform = NULL)
 }
 \arguments{
 \item{intensity_matrix}{matrix of intensities, rows are entries, columns are samples}

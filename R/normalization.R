@@ -102,7 +102,7 @@ mu_calc_normalization = function(intensity_df){
 #'
 #' @export
 #' @return matrix
-mu_apply_normalization = function(intensity_matrix, normalization_factors){
+mu_apply_normalization = function(intensity_matrix, normalization_factors, transform = NULL){
   match_names = base::intersect(colnames(intensity_matrix), names(normalization_factors))
   other_names = setdiff(colnames(intensity_matrix), names(normalization_factors))
 
@@ -117,6 +117,36 @@ mu_apply_normalization = function(intensity_matrix, normalization_factors){
 
   normalization_matrix = matrix(normalization_factors, nrow = nrow(intensity_matrix),
                                 ncol = length(normalization_factors), byrow = TRUE)
+
   normalized_matrix = intensity_matrix / normalization_matrix
   normalized_matrix
+}
+
+#' calculate imputed threshold
+#'
+#' Calculate a reasonable threshold value to replace zeros
+#'
+#' @param intensity_df intensity values across many samples
+#' @param value_transform how much to scale the value (default = 1/2)
+#'
+#' @details Not reported or missing values in our data cause all kinds of problems,
+#'   and for data with proportional error, log-transforms mean we can't just set
+#'   them to 0 either. In addition, just setting to zero inflates the differences
+#'   of values. So, a reasonable value for noise is 1/2 of the lowest observed value
+#'   in a *normal* like distribution. To achieve that for data with proportional data,
+#'   we do a log-transform first. Because we want to use *all* the data across samples,
+#'   we might have some weird outliers too. So we don't use the values directly
+#'   from the distrubtion, but use `boxplot.stats` to get a reasonable handle
+#'   on the distribution as well, and take a fraction of the lowest value in the
+#'   distribution description.
+#'
+#' @export
+#' @importFrom grDevices boxplot.stats
+#' @return double
+mu_calculate_threshold = function(intensity_df, value_transform = 1/2){
+  intensity_values = intensity_df$intensity
+  log_values = log(intensity_values)
+  log_stats = boxplot.stats(log_values)
+  threshold_value = value_transform * min(log_stats$stats)
+  exp(threshold_value)
 }
