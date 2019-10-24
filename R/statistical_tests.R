@@ -4,14 +4,24 @@
 #'
 #' @param data_vector the vector we are working with
 #' @param class_data what class are each entry in
+#' @param class_order what order should the classes be in for comparison?
 #' @param ... other parameters for t.test
 #'
 #' @return data.frame
 #' @importFrom stats t.test
 #' @importFrom broom tidy
-#'
-ttest_vector <- function(data_vector, class_data, ...){
-  split_data <- split(data_vector, class_data)
+#' @export
+ttest_vector <- function(data_vector, class_data, class_order = NULL, ...){
+  n_class = length(unique(class_data))
+  if (n_class != 2) {
+    stop_message = paste0("Your data has ", n_class, " classes. You must supply 2!")
+    stop(stop_message)
+  }
+  split_data = split(data_vector, class_data)
+
+  if (!is.null(class_order)) {
+    split_data = split_data[class_order]
+  }
 
   t_res <- stats::t.test(split_data[[1]], split_data[[2]])
   input_classes <- names(split_data)
