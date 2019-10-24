@@ -7,21 +7,31 @@
 #' @param min_correlation the minimum correlation value to color
 #'
 #' @export
-#' @importFrom visualizationQualityControl visqc_heatmap
+#' @importFrom visualizationQualityControl visqc_heatmap globally_it_weighted_pairwise_correlation visqc_heatmap similarity_reorderbyclass
+#' @importFrom RColorBrewer brewer.pal
+#' @importFrom circlize colorRamp2
 #' @return NULL
-create_correlation_plot = function(matrix_data, groups = NULL, min_correlation = 0.5){
+mu_correlation_plot = function(matrix_data, groups = NULL, min_correlation = 0.5){
   data_cor = globally_it_weighted_pairwise_correlation(t(matrix_data), exclude_0 = TRUE, zero_value = min(matrix_data))
   if (is.null(groups)) {
-    groups = rep("G", ncol(matrix_data))
-  }
-  data_order = similarity_reorderbyclass(data_cor$cor, groups, transform = "sub_1")
+    groups = data.frame(groups = rep("G", ncol(matrix_data)))
+    rownames(groups) = colnames(matrix_data)
+    data_order = similarity_reorderbyclass(data_cor$cor, groups[, "groups", drop = FALSE], transform = "sub_1")
 
-  data_legend = RColorBrewer::brewer.pal(nrow(unique(groups)), "Set1")
-  names(data_legend) = sort(unique(groups[, 1]))
+    data_legend = RColorBrewer::brewer.pal(nrow(unique(groups)), "Set1")[1]
+    names(data_legend) = sort(unique(groups[, 1]))
+
+
+  } else {
+    data_order = similarity_reorderbyclass(data_cor$cor, groups, transform = "sub_1")
+
+    data_legend = RColorBrewer::brewer.pal(nrow(unique(groups)), "Set1")
+    names(data_legend) = sort(unique(groups[, 1]))
+  }
 
   data_row_label = groups
-  data_annotation = list(mpq = data_legend)
-
+  data_annotation = list(v1 = data_legend)
+  names(data_annotation) = names(groups)
   cor_colormap = circlize::colorRamp2(seq(min_correlation, 1, length.out = 20), viridis::viridis(20))
 
   cor_vals = data_cor$cor
