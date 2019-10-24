@@ -26,7 +26,7 @@ ttest_vector <- function(data_vector, class_data, class_order = NULL, ...){
   if (!is.null(class_order)) {
     split_data = split_data[class_order]
   }
-  split_means = do.call(mean, split_data)
+  split_means = purrr::map_dbl(split_data, mean)
 
   # borrowed from stats:::t.test.default
   nx = length(split_data[[1]])
