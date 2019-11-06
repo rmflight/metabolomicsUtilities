@@ -98,14 +98,16 @@ import_emf_classifications = function(classification_file, fix_json = FALSE,
 
     for (icategory in names(remove_categories)) {
       matches_removal = rep(FALSE, nrow(class_data))
-      regex_match = paste0("^", icategory)
-      matches_removal[grepl(regex_match, class_data$Categories, ignore.case = TRUE)] = TRUE
+      regex_category = paste0("^", icategory)
+
       if (length(remove_categories[[icategory]]) > 0) {
         remove_classes = remove_categories[[icategory]]
         for (iclass in remove_classes) {
-          regex_match = paste0("^", iclass)
-          matches_removal = matches_removal & grepl(regex_match, class_data$Classes, ignore.case = TRUE)
+          regex_classes = paste0("^", iclass)
+          matches_removal = matches_removal | (grepl(regex_category, class_data$Categories, ignore.case = TRUE) & grepl(regex_classes, class_data$Classes, ignore.case = TRUE))
         }
+      } else {
+        matches_removal = matches_removal | grepl(regex_category, class_data$Categories, ignore.case = TRUE)
       }
       class_data = class_data[!matches_removal, ]
     }
