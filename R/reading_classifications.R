@@ -4,11 +4,36 @@
 #'
 #' @param classification_file the file to read from
 #' @param fix_json properly format the JSON so the JSON parser can read it?
-#' @param rm_na_formula remove those entries that have a formula entry of `NA`??
+#' @param remove_categories a named list of categories and classes to remove (see Details)
+#'
+#' @details `remove_categories` is used to define which categories and sub-classes of
+#'   lipids to remove. The default is a list for two classes in *Sphingolipids* that
+#'   are known to be over assigned, *neutral glycosphingolipics* and *acidic glycosphingolipids*.
+#'   The top name of the list defines the *Category* level, and then the text entries
+#'   underneath define the *Classes* to remove. See examples for different ways to
+#'   define this list that should do different things.
+#'
+#' @examples
+#' ## don't run these
+#' \dontrun{
+#'
+#'   # turn off filtering behavior
+#'   import_emf_classifications("categories.json", remove_categories = NULL)
+#'
+#'   # filter ALL Sphingolipids
+#'   import_emf_classifications("categories.json", remove_categories = list(
+#'     Sphingolipids = NULL))
+#'
+#'   # filter Ceramides
+#'   import_emf_classifications("categories.json", remove_categories = list(Sphingolipids = "ceramides"))
+#' }
 #'
 #' @return data.frame
 #' @export
-import_emf_classifications = function(classification_file, fix_json = FALSE){
+import_emf_classifications = function(classification_file, fix_json = FALSE,
+                                      remove_categories =
+                                        list(Sphingolipids = c("neutral glycosphingolipids",
+                                                               "acidic glycosphingolipids"))){
   if (fix_json) {
     emf_json = gsub("None", "null",
                     gsub("'", '"',
@@ -59,10 +84,32 @@ import_emf_classifications = function(classification_file, fix_json = FALSE){
       })
 
     }
+
     tmp_frame$isotopologue_EMF = in_emf
 
     tmp_frame
   })
 
+  # attempts to remove categories and classes set by the user
+  # Note that each one is done independently
+  # We also add the "^" to the regex, because we assume that whatever it is
+  # occurs should match at the beggining of the line
+  if (!is.null(remove_categories)) {
+
+    for (icategory in names(remove_categories)) {
+      matches_removal = rep(FALSE, nrow(class_data))
+      regex_match = paste0("^", icategory)
+      matches_removal[grepl(regex_match, class_data$Categories, ignore.case = TRUE)] = TRUE
+      if (length(remove_categories[[icategory]]) > 0) {
+        remove_classes = remove_categories[[icategory]]
+        for (iclass in remove_classes) {
+          regex_match = paste0("^", iclass)
+          matches_removal = matches_removal & grepl(regex_match, class_data$Classes, ignore.case = TRUE)
+        }
+      }
+      class_data = class_data[!matches_removal, ]
+    }
+
+  }
   class_data
 }

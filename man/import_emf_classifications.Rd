@@ -4,18 +4,44 @@
 \alias{import_emf_classifications}
 \title{Import EMF Classifications}
 \usage{
-import_emf_classifications(classification_file, fix_json = FALSE)
+import_emf_classifications(classification_file, fix_json = FALSE,
+  remove_categories = list(Sphingolipids =
+  c("neutral glycosphingolipids", "acidic glycosphingolipids")))
 }
 \arguments{
 \item{classification_file}{the file to read from}
 
 \item{fix_json}{properly format the JSON so the JSON parser can read it?}
 
-\item{rm_na_formula}{remove those entries that have a formula entry of `NA`??}
+\item{remove_categories}{a named list of categories and classes to remove (see Details)}
 }
 \value{
 data.frame
 }
 \description{
 Allows the reading in of EMF classification results from a JSON file.
+}
+\details{
+`remove_categories` is used to define which categories and sub-classes of
+  lipids to remove. The default is a list for two classes in *Sphingolipids* that
+  are known to be over assigned, *neutral glycosphingolipics* and *acidic glycosphingolipids*.
+  The top name of the list defines the *Category* level, and then the text entries
+  underneath define the *Classes* to remove. See examples for different ways to
+  define this list that should do different things.
+}
+\examples{
+## don't run these
+\dontrun{
+
+  # turn off filtering behavior
+  import_emf_classifications("categories.json", remove_categories = NULL)
+
+  # filter ALL Sphingolipids
+  import_emf_classifications("categories.json", remove_categories = list(
+    Sphingolipids = NULL))
+
+  # filter Ceramides
+  import_emf_classifications("categories.json", remove_categories = list(Sphingolipids = "ceramides"))
+}
+
 }
