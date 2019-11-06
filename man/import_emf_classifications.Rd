@@ -4,16 +4,17 @@
 \alias{import_emf_classifications}
 \title{Import EMF Classifications}
 \usage{
-import_emf_classifications(classification_file, fix_json = FALSE,
+import_emf_classifications(classification_file,
   remove_categories = list(Sphingolipids =
-  c("neutral glycosphingolipids", "acidic glycosphingolipids")))
+  c("neutral glycosphingolipids", "acidic glycosphingolipids")),
+  fix_json = FALSE)
 }
 \arguments{
 \item{classification_file}{the file to read from}
 
-\item{fix_json}{properly format the JSON so the JSON parser can read it?}
-
 \item{remove_categories}{a named list of categories and classes to remove (see Details)}
+
+\item{fix_json}{properly format the JSON so the JSON parser can read it?}
 }
 \value{
 data.frame

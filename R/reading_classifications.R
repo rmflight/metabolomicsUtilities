@@ -3,8 +3,8 @@
 #' Allows the reading in of EMF classification results from a JSON file.
 #'
 #' @param classification_file the file to read from
-#' @param fix_json properly format the JSON so the JSON parser can read it?
 #' @param remove_categories a named list of categories and classes to remove (see Details)
+#' @param fix_json properly format the JSON so the JSON parser can read it?
 #'
 #' @details `remove_categories` is used to define which categories and sub-classes of
 #'   lipids to remove. The default is a list for two classes in *Sphingolipids* that
@@ -30,10 +30,11 @@
 #'
 #' @return data.frame
 #' @export
-import_emf_classifications = function(classification_file, fix_json = FALSE,
+import_emf_classifications = function(classification_file,
                                       remove_categories =
                                         list(Sphingolipids = c("neutral glycosphingolipids",
-                                                               "acidic glycosphingolipids"))){
+                                                               "acidic glycosphingolipids")),
+                                      fix_json = FALSE){
   if (fix_json) {
     emf_json = gsub("None", "null",
                     gsub("'", '"',
