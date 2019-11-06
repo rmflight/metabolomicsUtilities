@@ -4,12 +4,12 @@
 \alias{vote_on_classifications}
 \title{vote on classifications}
 \usage{
-vote_on_classifications(class_list, return_opts = "single",
+vote_on_classifications(category_list, return_opts = "single",
   vote_threshold = 2/3 * 100, exclude_votes = c("not_lipid",
   "unclassifiable", as.character(NA)))
 }
 \arguments{
-\item{class_list}{a named list of classifications for each EMF}
+\item{category_list}{a named list of categories for each EMF}
 
 \item{return_opts}{what to return (`all`, `single`, `multiple`)}
 
@@ -18,8 +18,8 @@ vote_on_classifications(class_list, return_opts = "single",
 \item{exclude_votes}{which categories should be excluded?}
 }
 \description{
-Given a data.frame of EMF classifications, attempts to find most likely
+Given a data.frame of EMF categories / classes, attempts to find most likely
 classification using a voting method. Options for output include returning
-*all* the classifications, a *single* above a particular threshold (default = 0.66),
+*all* the categories, a *single* above a particular threshold (default = 0.66),
 or return the class *multiple* for those things that had multiple classes.
 }
