@@ -4,12 +4,14 @@
 \alias{ttest_vector}
 \title{t-test}
 \usage{
-ttest_vector(data_vector, class_data, ...)
+ttest_vector(data_vector, class_data, class_order = NULL, ...)
 }
 \arguments{
 \item{data_vector}{the vector we are working with}
 
 \item{class_data}{what class are each entry in}
+
+\item{class_order}{what order should the classes be in for comparison?}
 
 \item{...}{other parameters for t.test}
 }
