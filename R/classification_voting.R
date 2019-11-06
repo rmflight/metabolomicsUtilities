@@ -1,18 +1,18 @@
 #' vote on classifications
 #'
-#' Given a data.frame of EMF classifications, attempts to find most likely
+#' Given a data.frame of EMF categories / classes, attempts to find most likely
 #' classification using a voting method. Options for output include returning
-#' *all* the classifications, a *single* above a particular threshold (default = 0.66),
+#' *all* the categories, a *single* above a particular threshold (default = 0.66),
 #' or return the class *multiple* for those things that had multiple classes.
 #'
-#' @param class_list a named list of classifications for each EMF
+#' @param category_list a named list of categories for each EMF
 #' @param return_opts what to return (`all`, `single`, `multiple`)
 #' @param vote_threshold what is the vote threshold for `single`?
 #' @param exclude_votes which categories should be excluded?
 #'
 #' @export
 #' @importFrom purrr imap_dfr
-vote_on_classifications = function(class_list, return_opts = "single",
+vote_on_classifications = function(category_list, return_opts = "single",
                                    vote_threshold = 2/3 * 100,
                                    exclude_votes = c("not_lipid", "unclassifiable",
                                                      as.character(NA))){
@@ -22,7 +22,7 @@ vote_on_classifications = function(class_list, return_opts = "single",
                          multiple = multiple_vote,
                          all = all_vote)
 
-  purrr::imap_dfr(class_list, ~ vote_function(.x, .y, vote_threshold, exclude_votes))
+  purrr::imap_dfr(category_list, ~ vote_function(.x, .y, vote_threshold, exclude_votes))
 
 }
 
@@ -38,7 +38,7 @@ exclude_filter = function(in_list, exclude_votes = NULL){
 
 count_votes = function(in_list){
   vote_counts = rle(sort(in_list))
-  data.frame(class = vote_counts$values, counts = vote_counts$lengths,
+  data.frame(Categories = vote_counts$values, counts = vote_counts$lengths,
              percent = vote_counts$lengths / sum(vote_counts$lengths) * 100,
              stringsAsFactors = FALSE)
 }
@@ -71,7 +71,7 @@ multiple_vote = function(in_list, list_id, vote_threshold, exclude_votes){
   votes = count_votes(in_list)
 
   if (nrow(votes) > 1) {
-    votes[1, "class"] = "multiple"
+    votes[1, "Categories"] = "multiple"
     votes[1, "counts"] = sum(votes$counts)
     votes[1, "percent"] = 100
     votes = votes[1, ]
