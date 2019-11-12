@@ -6,18 +6,20 @@
 #' or return the class *multiple* for those things that had multiple classes.
 #'
 #' @param category_list a named list of categories for each EMF
-#' @param return_opts what to return (`all`, `single`, `multiple`)
+#' @param return_opts what to return (`max`, `all`, `single`, `multiple`)
 #' @param vote_threshold what is the vote threshold for `single`?
 #' @param exclude_votes which categories should be excluded?
 #'
 #' @export
 #' @importFrom purrr imap_dfr
-vote_on_classifications = function(category_list, return_opts = "single",
+vote_on_classifications = function(category_list, return_opts = "max",
                                    vote_threshold = 2/3 * 100,
                                    exclude_votes = c("not_lipid", "unclassifiable",
-                                                     as.character(NA))){
+                                                     as.character(NA),
+                                                     "not_lipid or not_classified")){
 
   vote_function = switch(return_opts,
+                         max = max_vote,
                          single = single_vote,
                          multiple = multiple_vote,
                          all = all_vote)
@@ -50,6 +52,16 @@ all_vote = function(in_list, list_id, vote_threshold, exclude_votes){
   votes$emf = list_id
   votes
 
+}
+
+max_vote = function(in_list, list_id, vote_threshold, exclude_votes){
+  in_list2 = exclude_filter(in_list, exclude_votes)
+
+  votes = count_votes(in_list2)
+  max_perc = max(votes$percent)
+  keep_votes = votes[votes$percent == max_perc, ]
+  keep_votes$emf = list_id
+  keep_votes
 }
 
 single_vote = function(in_list, list_id, vote_threshold, exclude_votes){
