@@ -4,10 +4,12 @@
 \alias{mu_numberc13}
 \title{get number of c13 incorporations}
 \usage{
-mu_numberc13(imfs)
+mu_numberc13(imfs, add_one = FALSE)
 }
 \arguments{
 \item{imfs}{vector of character formulas}
+
+\item{add_one}{should **1** be added (to avoid zero)?}
 }
 \value{
 integer

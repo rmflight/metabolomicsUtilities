@@ -4,14 +4,14 @@
 \alias{vote_on_classifications}
 \title{vote on classifications}
 \usage{
-vote_on_classifications(category_list, return_opts = "single",
+vote_on_classifications(category_list, return_opts = "max",
   vote_threshold = 2/3 * 100, exclude_votes = c("not_lipid",
-  "unclassifiable", as.character(NA)))
+  "unclassifiable", as.character(NA), "not_lipid or not_classified"))
 }
 \arguments{
 \item{category_list}{a named list of categories for each EMF}
 
-\item{return_opts}{what to return (`all`, `single`, `multiple`)}
+\item{return_opts}{what to return (`max`, `all`, `single`, `multiple`)}
 
 \item{vote_threshold}{what is the vote threshold for `single`?}
 

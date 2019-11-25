@@ -94,3 +94,34 @@ mu_normalize_emf = function(emf, normalization_factors, threshold_value = NULL){
   }
   tmp_norm
 }
+
+#' ratio m0
+#'
+#' Given an EMF matrix, take the ratio of all m+ peaks to the m0 peak to compare c13 incorporation
+#'
+#' @param emf the EMF matrix of values
+#'
+#' @export
+#' @return matrix
+mu_ratio_m0 = function(emf){
+  n_imf = nrow(emf)
+  m0 = matrix(emf[1, ], nrow = nrow(emf), ncol = ncol(emf), byrow = TRUE)
+
+  out_emf = emf / m0
+  out_emf
+}
+
+#' ratio sum
+#'
+#' Given an EMF matrix, take the ratio of all peaks to the sum of the peaks
+#'
+#' @param emf the EMF matrix of values
+#'
+#' @export
+#' @return matrix
+mu_ratio_emfSum = function(emf){
+  sum_emf = matrix(colSums(emf), nrow = nrow(emf), ncol = ncol(emf), byrow = TRUE)
+
+  out_emf = emf / sum_emf
+  out_emf
+}
