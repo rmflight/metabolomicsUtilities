@@ -26,6 +26,7 @@ mu_correlation_plot = function(matrix_data, groups = NULL, min_correlation = 0.5
     data_order = similarity_reorderbyclass(data_cor$cor, groups, transform = "sub_1")
 
     data_legend = RColorBrewer::brewer.pal(nrow(unique(groups)), "Set1")
+    data_legend = data_legend[1:nrow(unique(groups))]
     names(data_legend) = sort(unique(groups[, 1]))
   }
 
