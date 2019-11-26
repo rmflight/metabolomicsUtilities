@@ -1,7 +1,7 @@
 Package: metabolomicsUtilities
 Type: Package
 Title: Provides useful functions for working with metabolomics data
-Version: 0.0.45
+Version: 0.0.46
 Authors@R: person("Robert", "Flight", , "rflight79@gmail.com", role =
         c("aut", "cre"))
 Date: 2019-11-26

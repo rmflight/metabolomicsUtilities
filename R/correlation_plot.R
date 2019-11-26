@@ -105,3 +105,42 @@ mu_cooccurence_heatmap = function(distance_matrix, groups = NULL, min_value = 0)
                                       row_order = data_order$indices, column_order = data_order$indices)
   distance_heatmap
 }
+
+#' create a heatmap
+#'
+#' given a matrix denoting either distance or similarity, create a heatmap.
+#'
+#' @param matrix_data matrix of binary distances
+#' @param title the title of the data
+#' @param groups data.frame of groups (default = NULL)
+#' @param transform how to transform the data for similarity reordering
+#' @param min_value the minimum value to use (default = 0)
+#'
+#'
+#' @export
+#' @return NULL
+mu_heatmap = function(matrix_data, title = "", groups = NULL, transform = "none", min_value = 0){
+  viridis_colormap = circlize::colorRamp2(seq(min_value, 1, length.out = 20), viridis::viridis(20))
+
+  if (!is.null(groups)) {
+    data_order = similarity_reorderbyclass(matrix_data, groups, transform = transform)
+
+    data_legend = RColorBrewer::brewer.pal(nrow(unique(groups)), "Set1")
+    data_legend = data_legend[1:nrow(unique(groups))]
+    names(data_legend) = sort(unique(groups[, 1]))
+
+    data_row_label = groups
+    data_annotation = list(v1 = data_legend)
+    names(data_annotation) = names(groups)
+
+    out_heatmap = visqc_heatmap(matrix_data, viridis_colormap, title,
+                                     row_color_data = data_row_label, row_color_list = data_annotation,
+                                     col_color_data = data_row_label, col_color_list = data_annotation,
+                                     row_order = data_order$indices, column_order = data_order$indices)
+  } else {
+    data_order = similarity_reorderbyclass(matrix_data, groups, transform = transform)
+    out_heatmap = visqc_heatmap(matrix_data, viridis_colormap, title,
+                                row_order = data_order$indices, column_order = data_order$indices)
+  }
+  out_heatmap
+}
