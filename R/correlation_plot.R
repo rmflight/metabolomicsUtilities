@@ -103,5 +103,5 @@ mu_cooccurence_heatmap = function(distance_matrix, groups = NULL, min_value = 0)
                                       row_color_data = data_row_label, row_color_list = data_annotation,
                                       col_color_data = data_row_label, col_color_list = data_annotation,
                                       row_order = data_order$indices, column_order = data_order$indices)
-  correlation_heatmap
+  distance_heatmap
 }
