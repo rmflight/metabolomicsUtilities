@@ -5,14 +5,33 @@
 #' @param matrix_data the matrix of data, variables by samples (r x c)
 #' @param groups the groups of the samples
 #' @param min_correlation the minimum correlation value to color
+#' @param plot_title the title for the plot
+#' @param correlation_type whether to use globally or locally weighted correlation
 #'
 #' @export
 #' @importFrom visualizationQualityControl visqc_heatmap globally_it_weighted_pairwise_correlation visqc_heatmap similarity_reorderbyclass
 #' @importFrom RColorBrewer brewer.pal
 #' @importFrom circlize colorRamp2
 #' @return NULL
-mu_correlation_plot = function(matrix_data, groups = NULL, min_correlation = 0.5){
-  data_cor = globally_it_weighted_pairwise_correlation(t(matrix_data), exclude_0 = TRUE, zero_value = min(matrix_data))
+mu_correlation_plot = function(matrix_data, groups = NULL, min_correlation = 0.5, plot_title = "Sample Correlation",
+                               correlation_type = "global"){
+  if (correlation_type == "global") {
+    data_cor = globally_it_weighted_pairwise_correlation(t(matrix_data), exclude_0 = TRUE, zero_value = min(matrix_data))
+  } else if (correlation_type == "local") {
+    data_cor = locally_it_weighted_pairwise_correlation(t(matrix_data), exclude_0 = TRUE, zero_value = min(matrix_data))
+  }
+
+  na_entries = colSums(is.na(data_cor$cor))
+  which_all_na = which(na_entries == ncol(data_cor$cor))
+  if (length(which_all_na) > 0) {
+    data_cor$cor = data_cor$cor[-which_all_na, -which_all_na]
+    groups = groups[-which_all_na, , drop = FALSE]
+    remove_samples = paste0(names(which_all_na), collapse = ', ')
+    warning(paste0("Removing the following samples as their correlations are all NA: ", remove_samples))
+  }
+
+  data_cor$cor[is.na(data_cor$cor)] = 0
+
   if (is.null(groups)) {
     groups = data.frame(groups = rep("G", ncol(matrix_data)))
     rownames(groups) = colnames(matrix_data)
@@ -38,7 +57,7 @@ mu_correlation_plot = function(matrix_data, groups = NULL, min_correlation = 0.5
   cor_vals = data_cor$cor
   #rownames(cor_vals) = colnames(cor_vals) = gsub("_13C6.*", "", rownames(cor_vals))
 
-  correlation_heatmap = visqc_heatmap(cor_vals, cor_colormap, "Sample Correlations",
+  correlation_heatmap = visqc_heatmap(cor_vals, cor_colormap, plot_title,
                                       row_color_data = data_row_label, row_color_list = data_annotation,
                                       col_color_data = data_row_label, col_color_list = data_annotation,
                                       row_order = data_order$indices, column_order = data_order$indices)
@@ -115,15 +134,34 @@ mu_cooccurence_heatmap = function(distance_matrix, groups = NULL, min_value = 0)
 #' @param groups data.frame of groups (default = NULL)
 #' @param transform how to transform the data for similarity reordering
 #' @param min_value the minimum value to use (default = 0)
+#' @param ... other parameters for ComplexHeatmap
 #'
+#' @examples
+#' \dontrun{
+#' library(metabolomicsUtilities)
+#' set.seed(1234)
+#' mat <- matrix(rnorm(100, 2, sd = 0.5), 10, 10)
+#' rownames(mat) <- colnames(mat) <- letters[1:10]
 #'
+#' sample_class <- data.frame(grp = rep(c("grp1", "grp2"), each = 5), stringsAsFactors = FALSE)
+#' rownames(sample_class) <- rownames(mat)
+#'
+#' mu_heatmap(mat, groups = sample_class[, "grp", drop = FALSE])
+#'
+#' # if there is a class with only one member, it is dropped, with a warning
+#' sample_class[10, "grp"] = "grp3"
+#' mu_heatmap(mat, groups = sample_class[, "grp", drop = FALSE])
+#' }
 #' @export
 #' @return NULL
-mu_heatmap = function(matrix_data, title = "", groups = NULL, transform = "none", min_value = 0){
+mu_heatmap = function(matrix_data, title = "", groups = NULL, transform = "none", min_value = 0, ...){
   viridis_colormap = circlize::colorRamp2(seq(min_value, 1, length.out = 20), viridis::viridis(20))
 
   if (!is.null(groups)) {
     data_order = similarity_reorderbyclass(matrix_data, groups, transform = transform)
+    use_indices = data_order$indices
+    keep_groups = seq(1, nrow(groups)) %in% use_indices
+    groups = groups[keep_groups, , drop = FALSE]
 
     data_legend = RColorBrewer::brewer.pal(nrow(unique(groups)), "Set1")
     data_legend = data_legend[1:nrow(unique(groups))]
@@ -133,14 +171,23 @@ mu_heatmap = function(matrix_data, title = "", groups = NULL, transform = "none"
     data_annotation = list(v1 = data_legend)
     names(data_annotation) = names(groups)
 
+
+    matrix_keep = seq(1, nrow(matrix_data)) %in% use_indices
+    matrix_data = matrix_data[matrix_keep, matrix_keep]
+
     out_heatmap = visqc_heatmap(matrix_data, viridis_colormap, title,
                                      row_color_data = data_row_label, row_color_list = data_annotation,
                                      col_color_data = data_row_label, col_color_list = data_annotation,
-                                     row_order = data_order$indices, column_order = data_order$indices)
+                                     row_order = use_indices, column_order = use_indices, ...)
   } else {
     data_order = similarity_reorderbyclass(matrix_data, groups, transform = transform)
+
+    use_indices = data_order$indices
+    matrix_keep = seq(1, nrow(matrix_data)) %in% use_indices
+    matrix_data = matrix_data[matrix_keep, matrix_keep]
+
     out_heatmap = visqc_heatmap(matrix_data, viridis_colormap, title,
-                                row_order = data_order$indices, column_order = data_order$indices)
+                                row_order = use_indices, column_order = use_indices, ...)
   }
   out_heatmap
 }
