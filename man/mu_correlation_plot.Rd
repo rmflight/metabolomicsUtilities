@@ -4,7 +4,8 @@
 \alias{mu_correlation_plot}
 \title{create correlation plot}
 \usage{
-mu_correlation_plot(matrix_data, groups = NULL, min_correlation = 0.5)
+mu_correlation_plot(matrix_data, groups = NULL, min_correlation = 0.5,
+  plot_title = "Sample Correlation", correlation_type = "global")
 }
 \arguments{
 \item{matrix_data}{the matrix of data, variables by samples (r x c)}
@@ -12,6 +13,10 @@ mu_correlation_plot(matrix_data, groups = NULL, min_correlation = 0.5)
 \item{groups}{the groups of the samples}
 
 \item{min_correlation}{the minimum correlation value to color}
+
+\item{plot_title}{the title for the plot}
+
+\item{correlation_type}{whether to use globally or locally weighted correlation}
 }
 \description{
 Given matrix data, create a correlation heatmap with reordering by group.

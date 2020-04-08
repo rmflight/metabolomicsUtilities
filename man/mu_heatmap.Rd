@@ -5,7 +5,7 @@
 \title{create a heatmap}
 \usage{
 mu_heatmap(matrix_data, title = "", groups = NULL,
-  transform = "none", min_value = 0)
+  transform = "none", min_value = 0, ...)
 }
 \arguments{
 \item{matrix_data}{matrix of binary distances}
@@ -17,7 +17,26 @@ mu_heatmap(matrix_data, title = "", groups = NULL,
 \item{transform}{how to transform the data for similarity reordering}
 
 \item{min_value}{the minimum value to use (default = 0)}
+
+\item{...}{other parameters for ComplexHeatmap}
 }
 \description{
 given a matrix denoting either distance or similarity, create a heatmap.
+}
+\examples{
+\dontrun{
+library(metabolomicsUtilities)
+set.seed(1234)
+mat <- matrix(rnorm(100, 2, sd = 0.5), 10, 10)
+rownames(mat) <- colnames(mat) <- letters[1:10]
+
+sample_class <- data.frame(grp = rep(c("grp1", "grp2"), each = 5), stringsAsFactors = FALSE)
+rownames(sample_class) <- rownames(mat)
+
+mu_heatmap(mat, groups = sample_class[, "grp", drop = FALSE])
+
+# if there is a class with only one member, it is dropped, with a warning
+sample_class[10, "grp"] = "grp3"
+mu_heatmap(mat, groups = sample_class[, "grp", drop = FALSE])
+}
 }
