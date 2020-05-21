@@ -88,29 +88,59 @@ OK, I previously messed up the rank within a sample, in that a lower number prev
 A higher number in a sample means it is more highly ranked in the sample.
 
 But we are going to try anyway.
-The next step then is to look at the peaks that appear in a large fraction of samples (> 0.8), and compare their rank in a sample to the number of peaks in that sample.
+The next step then is to look at the peaks that appear in a decent number of samples, say **10** (so a fraction >= 0.05), and let's slice it down to things that are in the range of 0.5 median ranked across samples, using a range of 0.4 to 0.6.
 
-Each of the IMFs chosen has a maximum relative rank <= 0.9 , and then we plot it's relative rank in each sample compared to the number of peaks in each sample.
-
-```{r compare_fraction_to_rank, fig.width=8, fig.height=8}
-high_fraction = dplyr::filter(imf_ranks, fraction >= 0.8)
-high_fraction_maxrank = dplyr::group_by(high_fraction, imf) %>%
-  dplyr::summarise(max_rank = max(fractional_rank))
-has_low_rank = dplyr::filter(high_fraction_maxrank, max_rank < 0.9)
-
-high_fraction_byrank = dplyr::left_join(has_low_rank, high_fraction, by = "imf")
-
-p = ggplot(high_fraction_byrank, aes(x = n_peak, y = fractional_rank)) + geom_point() +
-  facet_wrap(~ imf, ncol = 3, scales = "free") +
-  geom_smooth()
-  
-p
+```{r plot_points_inrange}
+ggplot(imf_median_rank, aes(x = median_rank, y = fraction)) + geom_point(alpha = 0.5) +
+  xlim(0.4, 0.6) + 
+  geom_hline(yintercept = 0.05, color = "red") +
+  labs(subtitle = "Median Rank across Samples vs Fraction of Total Samples",
+       x = "Median Rank of Peak", y = "Fraction of Samples Present")
 ```
 
+```{r trim_data}
+trim_ranks = dplyr::filter(imf_median_rank, dplyr::between(median_rank, 0.4, 0.6),
+                           fraction >= 0.055)
 
-```{r big_version_of_figure, include = FALSE}
-Cairo::CairoPNG(filename = "testing_stuff/high_fraction_rank.png", width = 16, height = 16,
-                bg = "white", units = "in", dpi = 300)
-p
-dev.off()
+use_peaks = dplyr::filter(imf_2_peak, imf %in% trim_ranks$imf) %>%
+  dplyr::left_join(., all_peaks, by = "Sample_Peak")
+
+ggplot(use_peaks, aes(x = n_peak, y = fractional_rank)) + geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm")
+cor.test(use_peaks$n_peak, use_peaks$fractional_rank)
 ```
+
+OK, there is definitely a positive correlation between the fractional rank of a peak and the number of peaks in the sample.
+Now, can we correct it and make the correlation value lower?
+
+```{r correct_data}
+max_peaks = max(use_peaks$n_peak)
+
+use_peaks2 = dplyr::select(use_peaks, imf, Sample_Peak, fraction, rank, n_peak, fractional_rank) %>%
+  dplyr::mutate(peak_max = n_peak / max_peaks)
+use_peaks2 = dplyr::mutate(use_peaks2, corrected_rank = fractional_rank / (peak_max))
+
+ggplot(use_peaks2, aes(x = n_peak, y = corrected_rank)) + geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm")
+cor.test(use_peaks2$n_peak, use_peaks2$corrected_rank)
+```
+
+OK, this doesn't work, and I think I know why.
+It's because the the maximum value of `fractional_rank` is **not** 1.
+If the maximum values **was** 1, then this simple correction would work.
+
+An alternative method is to use the fitted linear model, and the ratio of the current predicted value to the maximum predicted value.
+I think that should work to transform our correlation to something closer to 0.
+
+```{r correct_try2}
+fit_npeak = lm(fractional_rank ~ n_peak, data = use_peaks2)
+fitted_ranks = fit_npeak$fitted.values
+use_peaks2$rank_ratio = fitted_ranks / max(fitted_ranks)
+use_peaks2 = dplyr::mutate(use_peaks2, corrected_rank2 = fractional_rank / rank_ratio)
+
+ggplot(use_peaks2, aes(x = n_peak, y = corrected_rank2)) + geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm")
+cor.test(use_peaks2$n_peak, use_peaks2$corrected_rank2)
+```
+
+**And the correlation is gone!** The 95% CI on the test is now: -0.02 - 0.02
