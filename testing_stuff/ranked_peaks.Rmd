@@ -143,4 +143,14 @@ ggplot(use_peaks2, aes(x = n_peak, y = corrected_rank2)) + geom_point(alpha = 0.
 cor.test(use_peaks2$n_peak, use_peaks2$corrected_rank2)
 ```
 
-**And the correlation is gone!** The 95% CI on the test is now: -0.02 - 0.02
+**And the correlation is gone!** The 95% CI on the test is now: -0.02 - 0.02.
+
+## How Does This Affect Normalization?
+
+OK, we can correct the ranking of peaks within a sample.
+So how does this affect normalization?
+
+If we correct the ranking of **all** peaks in **all** samples, then we have a much better idea of **which** peaks actually have ranks close to **0.5** in a majority of samples, if they exist.
+
+We should be using peaks with a median rank close to **0.5** to normalize samples.
+We can test this by doing a p-value comparison, similar to what we've done previously (code which I need to find).
