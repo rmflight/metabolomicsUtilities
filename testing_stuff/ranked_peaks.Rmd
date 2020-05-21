@@ -1,0 +1,116 @@
+---
+title: 'Examining Corresponding, Ranked Peaks'
+author: 'Robert M Flight'
+date: '`r Sys.time()`'
+output:
+  pdf_document:
+    extra_dependencies: ['longtable', 'float']
+urlcolor: blue
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+## Purpose
+
+Hunter has this idea that we can improve sample-to-sample normalization using relative ranking of peaks based on their intensity ranks.
+So this is me trying to figure out if that will work.
+
+## Setup
+
+```{r setup_packages}
+library(dplyr)
+library(visualizationQualityControl)
+library(smirfeTools)
+library(ggplot2)
+theme_set(cowplot::theme_cowplot())
+```
+
+## Load Data
+
+Data we have is **all** the peaks from each sample, along with their ranks, along with the assigned and voted on peaks across samples.
+The peaks and their IDs (`Sample_Peak`) should match up between the two data sets.
+
+```{r load_data}
+all_peaks = readRDS("testing_stuff/lung_all_peaks.rds")
+voted_data = readRDS("testing_stuff/lung_voted_all.rds")
+imf_data = extract_imf_emf_data(voted_data, by = "IMF")
+```
+
+## Analysis
+
+```{r peak_correspondence}
+imf_peaks = imf_data$peaks
+peak_counts = apply(imf_peaks, 1, function(.x){sum(!is.na(.x))})
+n_sample = ncol(imf_peaks)
+
+peak_frac = peak_counts / n_sample
+peak_frac_df = data.frame(imf = rownames(imf_peaks), fraction = peak_frac,
+                          stringsAsFactors = FALSE)
+
+imf_2_peak = purrr::map_df(rownames(imf_peaks), function(in_row){
+  data.frame(imf = in_row,
+             Sample_Peak = as.vector(imf_peaks[in_row, ]),
+             stringsAsFactors = FALSE)
+})
+imf_2_peak = dplyr::filter(imf_2_peak, !is.na(Sample_Peak))
+imf_2_peak = dplyr::left_join(imf_2_peak, peak_frac_df, by = "imf")
+use_imf = peak_frac >= 0.9
+use_peaks = imf_peaks[use_imf, ]
+```
+
+```{r peak_ranks}
+n_peak_sample = dplyr::group_by(all_peaks, Sample) %>%
+  dplyr::summarise(n_peak = dplyr::n())
+all_peaks = dplyr::left_join(all_peaks, n_peak_sample, by = "Sample")
+all_peaks$fractional_rank = 1 - (all_peaks$rank / all_peaks$n_peak)
+
+imf_ranks = dplyr::left_join(imf_2_peak, all_peaks[, c("Sample_Peak", "fractional_rank", "n_peak")], by = "Sample_Peak")
+
+imf_median_rank = dplyr::group_by(imf_ranks, imf) %>%
+  dplyr::summarize(median_rank = median(fractional_rank))
+imf_median_rank = dplyr::left_join(imf_median_rank, peak_frac_df, by = "imf")
+```
+
+Let's see if the data that Hunter would want to use even exists!
+
+```{r check_fractions_vs_rank}
+ggplot(imf_median_rank, aes(x = median_rank, y = fraction)) + geom_point(alpha = 0.5) +
+  geom_vline(xintercept = 0.5, color = "red") +
+  geom_hline(yintercept = 0.8, color = "red") +
+  labs(subtitle = "Median Rank across Samples vs Fraction of Total Samples",
+       x = "Median Rank of Peak", y = "Fraction of Samples Present")
+```
+
+OK, I previously messed up the rank within a sample, in that a lower number previously meant it was more highly ranked.
+**Now it is right!**
+A higher number in a sample means it is more highly ranked in the sample.
+
+But we are going to try anyway.
+The next step then is to look at the peaks that appear in a large fraction of samples (> 0.8), and compare their rank in a sample to the number of peaks in that sample.
+
+Each of the IMFs chosen has a maximum relative rank <= 0.9 , and then we plot it's relative rank in each sample compared to the number of peaks in each sample.
+
+```{r compare_fraction_to_rank, fig.width=8, fig.height=8}
+high_fraction = dplyr::filter(imf_ranks, fraction >= 0.8)
+high_fraction_maxrank = dplyr::group_by(high_fraction, imf) %>%
+  dplyr::summarise(max_rank = max(fractional_rank))
+has_low_rank = dplyr::filter(high_fraction_maxrank, max_rank < 0.9)
+
+high_fraction_byrank = dplyr::left_join(has_low_rank, high_fraction, by = "imf")
+
+p = ggplot(high_fraction_byrank, aes(x = n_peak, y = fractional_rank)) + geom_point() +
+  facet_wrap(~ imf, ncol = 3, scales = "free") +
+  geom_smooth()
+  
+p
+```
+
+
+```{r big_version_of_figure, include = FALSE}
+Cairo::CairoPNG(filename = "testing_stuff/high_fraction_rank.png", width = 16, height = 16,
+                bg = "white", units = "in", dpi = 300)
+p
+dev.off()
+```
