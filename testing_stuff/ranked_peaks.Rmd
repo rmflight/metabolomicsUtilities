@@ -145,6 +145,28 @@ cor.test(use_peaks2$n_peak, use_peaks2$corrected_rank2)
 
 **And the correlation is gone!** The 95% CI on the test is now: -0.02 - 0.02.
 
+Hunter thinks we can do it if we adjust it again slightly, using `max(fitted_ranks)/2` as the factor.
+
+```{r correct_try3}
+use_peaks2$rank_ratio3 = fitted_ranks / (max(fitted_ranks) / 2)
+use_peaks2 = dplyr::mutate(use_peaks2, corrected_rank3 = fractional_rank / rank_ratio3)
+
+ggplot(use_peaks2, aes(x = n_peak, y = corrected_rank3)) + geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm")
+cor.test(use_peaks2$n_peak, use_peaks2$corrected_rank3)
+```
+
+OK, neat, that also seems to work, and is much easier to implement.
+It does seem to pull things **down** instead of **up** however.
+From that perspective I'm not quite sure which one is actually better.
+
+```{r compare_corrections}
+ggplot(use_peaks2, aes(x = corrected_rank2, y = corrected_rank3)) + geom_point() +
+  geom_abline(slope = 0.5, color = "red")
+```
+
+But overall they are correcting the fractional ranks the same way, which makes sense because we are just shifting the peaks either up or down.
+
 ## How Does This Affect Normalization?
 
 OK, we can correct the ranking of peaks within a sample.
@@ -154,3 +176,33 @@ If we correct the ranking of **all** peaks in **all** samples, then we have a mu
 
 We should be using peaks with a median rank close to **0.5** to normalize samples.
 We can test this by doing a p-value comparison, similar to what we've done previously (code which I need to find).
+
+### But Wait ...
+
+Is the ratio of the median to the max intensity affected the same way?
+If it is, that implies that we could simply adjust the median value using this same correction, and then still correct by the median.
+I bring this up because I don't think we will find many peaks that will be ranked near the middle of the pack.
+
+But that also begs the question, do we need to use peaks for normalization that are near the center, or can we use anything that is **consistently** ranked the same (after above correction) across samples??
+
+```{r check_median_ratio}
+json_data = readRDS("testing_stuff/lung_all_json.rds")
+median_intensities = purrr::map_df(json_data, function(in_json){
+  data.frame(Sample = gsub(".zip$", "", in_json$zip$file),
+             median = in_json$peak$other_info$median_intensity,
+             stringsAsFactors = FALSE)
+})
+
+match_median = purrr::map_df(seq(1, nrow(median_intensities)), function(in_row){
+  tmp_data = median_intensities[in_row, ]
+  match_sample_median = dplyr::filter(all_peaks, Sample %in% tmp_data$Sample)
+  use_peak = which.min(abs(tmp_data$median - match_sample_median$Height))
+  cbind(tmp_data, match_sample_median[use_peak, c("Height", "Sample_Peak", "fractional_rank", "n_peak")])
+})
+max_peak = dplyr::group_by(all_peaks, Sample) %>%
+  dplyr::summarise(max_intensity = max(Height))
+median_intensities = dplyr::left_join(median_intensities, max_peak, by = "Sample")
+median_intensities = dplyr::mutate(median_intensities, fraction = median / max_intensity)
+median_intensities = dplyr::left_join(median_intensities, unique(all_peaks[, c("Sample", "n_peak")]), by = "Sample")
+```
+
