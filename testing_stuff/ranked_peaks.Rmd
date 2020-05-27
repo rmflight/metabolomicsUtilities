@@ -6,6 +6,8 @@ output:
   pdf_document:
     extra_dependencies: ['longtable', 'float']
 urlcolor: blue
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
@@ -41,6 +43,10 @@ imf_data = extract_imf_emf_data(voted_data, by = "IMF")
 ## Analysis
 
 ```{r peak_correspondence}
+calc_rank = function(values){
+  rank(values, ties.method = "random") / length(values)
+}
+
 imf_peaks = imf_data$peaks
 peak_counts = apply(imf_peaks, 1, function(.x){sum(!is.na(.x))})
 n_sample = ncol(imf_peaks)
@@ -61,10 +67,14 @@ use_peaks = imf_peaks[use_imf, ]
 ```
 
 ```{r peak_ranks}
+split_peaks = split(all_peaks, all_peaks$Sample)
+all_peaks = purrr::map_df(split_peaks, function(in_peaks){
+  in_peaks$fractional_rank = calc_rank(in_peaks$Height)
+  in_peaks
+})
 n_peak_sample = dplyr::group_by(all_peaks, Sample) %>%
   dplyr::summarise(n_peak = dplyr::n())
 all_peaks = dplyr::left_join(all_peaks, n_peak_sample, by = "Sample")
-all_peaks$fractional_rank = 1 - (all_peaks$rank / all_peaks$n_peak)
 
 imf_ranks = dplyr::left_join(imf_2_peak, all_peaks[, c("Sample_Peak", "fractional_rank", "n_peak")], by = "Sample_Peak")
 
@@ -145,10 +155,28 @@ cor.test(use_peaks2$n_peak, use_peaks2$corrected_rank2)
 
 **And the correlation is gone!** The 95% CI on the test is now: -0.02 - 0.02.
 
-Hunter thinks we can do it if we adjust it again slightly, using `max(fitted_ranks)/2` as the factor.
+```{r fits}
+fit_npeak
+
+out_fit = data.frame(n_peak = use_peaks2$n_peak, fractional_rank = use_peaks2$fractional_rank, fitted_rank = fit_npeak$fitted.values)
+write.table(out_fit, file = "testing_stuff/linear_fit.csv", sep = ",", row.names = FALSE, col.names = TRUE)
+```
+
+There is actually a sigmoidal fit, which we can see if we use a `glm` model.
+
+```{r sigmoid_fit}
+gam_fit = mgcv::gam(fractional_rank ~ s(n_peak, bs = "cs"), data = use_peaks2)
+
+out_gam = data.frame(n_peak = use_peaks2$n_peak, fractional_rank = use_peaks2$fractional_rank, fitted_rank = gam_fit$fitted.values)
+write.table(out_gam, file = "testing_stuff/sigmoid_fit.csv", sep = ",", row.names = FALSE,
+            col.names = TRUE)
+```
+
+Hunter thinks we can do it if we adjust it again slightly, using `peak_max / 2` as the factor.
 
 ```{r correct_try3}
-use_peaks2$rank_ratio3 = fitted_ranks / (max(fitted_ranks) / 2)
+use_peaks2 = use_peaks2 %>%
+  dplyr::mutate(rank_ratio3 = n_peak / (max_peaks / 2))
 use_peaks2 = dplyr::mutate(use_peaks2, corrected_rank3 = fractional_rank / rank_ratio3)
 
 ggplot(use_peaks2, aes(x = n_peak, y = corrected_rank3)) + geom_point(alpha = 0.5) +
@@ -156,16 +184,105 @@ ggplot(use_peaks2, aes(x = n_peak, y = corrected_rank3)) + geom_point(alpha = 0.
 cor.test(use_peaks2$n_peak, use_peaks2$corrected_rank3)
 ```
 
-OK, neat, that also seems to work, and is much easier to implement.
-It does seem to pull things **down** instead of **up** however.
-From that perspective I'm not quite sure which one is actually better.
+Nope, that doesn't work.
+So the linear model fit looks like the best bet, even if it seems to pull up instead of down ...
 
-```{r compare_corrections}
-ggplot(use_peaks2, aes(x = corrected_rank2, y = corrected_rank3)) + geom_point() +
-  geom_abline(slope = 0.5, color = "red")
+## Verify By Simulation
+
+So I wonder if we can verify this is what happens using a simulation?
+If we take say 200 samples, with 4500 peaks, and then let up to 1/2 of the mostly lower intensity ones get dropped, do we see the same phenomena?
+The nice thing is, because we are talking about ranks (essentially quantiles) they are actually distribution agnostic.
+
+```{r simulate_dropout}
+set.seed(1234)
+library(fakeDataWithError)
+base_distribution = rnorm(4500, mean = 10, sd = 1)
+rep_data = add_uniform_noise(200, base_distribution, 0.5)
+rep_data = matrix(base_distribution, nrow = length(base_distribution), ncol = 200, byrow = FALSE)
+drop_prob = rnorm(200, mean = 2500, sd = 800)
+low_prob = drop_prob < 1800
+drop_prob[low_prob] = drop_prob[low_prob] + 1800
+hi_prob = drop_prob > 4500
+drop_prob[hi_prob] = 4500
+colnames(rep_data) = paste0("s", seq(1, ncol(rep_data)))
+rownames(rep_data) = paste0("f", seq(1, nrow(rep_data)))
+drop_prob = floor(drop_prob)
 ```
 
-But overall they are correcting the fractional ranks the same way, which makes sense because we are just shifting the peaks either up or down.
+My strategy for this is going to be:
+  * Coin toss
+  * Probability of Remove / Keep is going to start at 0.9 / 0.1 and decrease to 0.5 / 0.5 as calculated rank approaches 0.5
+  * Continue removing points until we reach number of points to remove (based on `drop_prob` above)
+  * This should allow low intensity points to be kept at random and also remove random points above a rank of 0.5
+
+```{r remove_points}
+removed_points = purrr::map_df(seq(1, ncol(rep_data)), function(in_col){
+  #message(in_col)
+  tmp_data = rep_data[, in_col]
+  tmp_rank = calc_rank(tmp_data)
+  names(tmp_rank) = names(tmp_data)
+  
+  get_loc = 1
+  if (drop_prob[in_col] > length(tmp_data)/2) {
+    keep_or_drop = rep(TRUE, length(tmp_rank))
+    while (sum(keep_or_drop) > drop_prob[in_col]) {
+      if (get_loc > length(tmp_rank)) {
+        get_loc = 1
+      }
+      if (keep_or_drop[get_loc]) {
+        keep_or_drop[get_loc] = sample(c(TRUE, FALSE), 1, prob = c(tmp_rank[get_loc], 1 - tmp_rank[get_loc]))
+      }
+      get_loc = get_loc + 1
+    }
+  } else {
+    keep_or_drop = rep(FALSE, length(tmp_rank))
+    while (sum(keep_or_drop) <= drop_prob[in_col]) {
+      
+      if (get_loc > length(tmp_rank)) {
+        get_loc = 1
+      }
+      if (!(keep_or_drop[get_loc])) {
+        keep_or_drop[get_loc] = sample(c(TRUE, FALSE), 1, prob = c(tmp_rank[get_loc], 1 - tmp_rank[get_loc]))
+      }
+       
+      get_loc = get_loc + 1
+    #message(sum(keep_or_drop))
+    }
+  }
+  
+  out_data = data.frame(Peak = names(tmp_rank),
+                        Sample = colnames(rep_data)[in_col],
+                        Height = tmp_data,
+                        org_rank = tmp_rank,
+                        stringsAsFactors = FALSE)
+  out_data$Sample_Peak = paste0(out_data$Sample, "_", out_data$Peak)
+  out_data = out_data[keep_or_drop, ]
+  out_data$new_rank = calc_rank(out_data$Height)
+  out_data
+})
+```
+
+OK, and now we can check things out!
+
+```{r check_removed}
+removed_npeak = dplyr::group_by(removed_points, Sample) %>%
+  dplyr::summarize(n_peak = dplyr::n())
+removed_points = dplyr::left_join(removed_points, removed_npeak, by = "Sample")
+n_insample = dplyr::group_by(removed_points, Peak) %>%
+  dplyr::summarise(n_sample = dplyr::n(),
+                   median_rank = median(new_rank))
+keep_removed = dplyr::filter(n_insample, n_sample >= 10,
+                             dplyr::between(median_rank, 0.4, 0.6))
+```
+
+```{r plot_removed, dev = 'png'}
+removed_keep = dplyr::filter(removed_points, Peak %in% keep_removed$Peak)
+ggplot(removed_keep, aes(x = n_peak, y = new_rank)) + geom_point() +
+  geom_smooth(method = "lm")
+```
+
+Cool, I had the removal of points incorrect, and was preferentially removing points on the high end.
+Now this is correct, and matches what we've been seeing in our samples above.
 
 ## How Does This Affect Normalization?
 
@@ -184,25 +301,3 @@ If it is, that implies that we could simply adjust the median value using this s
 I bring this up because I don't think we will find many peaks that will be ranked near the middle of the pack.
 
 But that also begs the question, do we need to use peaks for normalization that are near the center, or can we use anything that is **consistently** ranked the same (after above correction) across samples??
-
-```{r check_median_ratio}
-json_data = readRDS("testing_stuff/lung_all_json.rds")
-median_intensities = purrr::map_df(json_data, function(in_json){
-  data.frame(Sample = gsub(".zip$", "", in_json$zip$file),
-             median = in_json$peak$other_info$median_intensity,
-             stringsAsFactors = FALSE)
-})
-
-match_median = purrr::map_df(seq(1, nrow(median_intensities)), function(in_row){
-  tmp_data = median_intensities[in_row, ]
-  match_sample_median = dplyr::filter(all_peaks, Sample %in% tmp_data$Sample)
-  use_peak = which.min(abs(tmp_data$median - match_sample_median$Height))
-  cbind(tmp_data, match_sample_median[use_peak, c("Height", "Sample_Peak", "fractional_rank", "n_peak")])
-})
-max_peak = dplyr::group_by(all_peaks, Sample) %>%
-  dplyr::summarise(max_intensity = max(Height))
-median_intensities = dplyr::left_join(median_intensities, max_peak, by = "Sample")
-median_intensities = dplyr::mutate(median_intensities, fraction = median / max_intensity)
-median_intensities = dplyr::left_join(median_intensities, unique(all_peaks[, c("Sample", "n_peak")]), by = "Sample")
-```
-
