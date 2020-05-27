@@ -275,7 +275,7 @@ keep_removed = dplyr::filter(n_insample, n_sample >= 10,
                              dplyr::between(median_rank, 0.4, 0.6))
 ```
 
-```{r plot_removed, dev = 'png'}
+```{r plot_removed}
 removed_keep = dplyr::filter(removed_points, Peak %in% keep_removed$Peak)
 ggplot(removed_keep, aes(x = n_peak, y = new_rank)) + geom_point() +
   geom_smooth(method = "lm")
@@ -301,3 +301,9 @@ If it is, that implies that we could simply adjust the median value using this s
 I bring this up because I don't think we will find many peaks that will be ranked near the middle of the pack.
 
 But that also begs the question, do we need to use peaks for normalization that are near the center, or can we use anything that is **consistently** ranked the same (after above correction) across samples??
+
+## Hunter Comments on Correction
+
+((max_peaks/2) - missing_peaks)/(max_peaks - missing_peaks) 
+
+where missing peaks = max_peaks - curr_peaks
