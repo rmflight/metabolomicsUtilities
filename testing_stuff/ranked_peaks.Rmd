@@ -123,24 +123,67 @@ cor.test(use_peaks$n_peak, use_peaks$fractional_rank)
 OK, there is definitely a positive correlation between the fractional rank of a peak and the number of peaks in the sample.
 Now, can we correct it and make the correlation value lower?
 
+Hunter thinks the correction should be:
+
+$$\frac{(P_{max}/2) - P_{missing}}{P_{max} - P_{missing}}$$
+
+where $P_{missing} = P_{max} - P_{sample}$
+
 ```{r correct_data}
 max_peaks = max(use_peaks$n_peak)
 
 use_peaks2 = dplyr::select(use_peaks, imf, Sample_Peak, fraction, rank, n_peak, fractional_rank) %>%
-  dplyr::mutate(peak_max = n_peak / max_peaks)
-use_peaks2 = dplyr::mutate(use_peaks2, corrected_rank = fractional_rank / (peak_max))
+  dplyr::mutate(p_missing = max_peaks - n_peak)
+use_peaks2 = dplyr::mutate(use_peaks2, correction_factor = ((max_peaks/2) - p_missing) / (max_peaks - p_missing))
+use_peaks2 = dplyr::mutate(use_peaks2, corrected_rank = fractional_rank * (1 - correction_factor))
 
 ggplot(use_peaks2, aes(x = n_peak, y = corrected_rank)) + geom_point(alpha = 0.5) +
   geom_smooth(method = "lm")
 cor.test(use_peaks2$n_peak, use_peaks2$corrected_rank)
 ```
 
-OK, this doesn't work, and I think I know why.
-It's because the the maximum value of `fractional_rank` is **not** 1.
-If the maximum values **was** 1, then this simple correction would work.
+OK, this doesn't work, and now I don't know why.
+
+Let's try a simple example.
+
+```{r example_rank_correction}
+tmp_data = rnorm(1000)
+tmp_ranks = calc_rank(tmp_data)
+
+rank_df = data.frame(value = tmp_data, org_rank = tmp_ranks)
+rank_df2 = rank_df[order(rank_df$org_rank), ]
+rank_df2 = rank_df2[200:1000, ]
+rank_df2$new_rank = calc_rank(rank_df2$value)
+
+ggplot(rank_df2, aes(new_rank, org_rank)) + geom_point() + geom_abline(slope = 0.8, intercept = 0.2,  color = "red")
+```
+
+Interestingly, we can create a linear model **$rank_{org} = 0.2 + 0.8 \times rank_{new}$)** that relates the two ranks.
+
+So, this corresponds to doing the following:
+
+$$rank_{org} = (1 - \frac{P_{sample}}{P_{max}})+ \frac{P_{sample}}{P_{max}} \times rank_{new}$$
+
+Let's see if we can get this to work on our actual data.
+
+```{r correct_data2}
+max_peaks = 3500
+use_peaks3 = dplyr::select(use_peaks, imf, Sample_Peak, fraction, rank, n_peak, fractional_rank) %>%
+  dplyr::mutate(model1 = 1 - (n_peak / max_peaks),
+                model2 = n_peak / max_peaks)
+use_peaks3 = dplyr::mutate(use_peaks3, corrected_rank = model1 + (model2 * fractional_rank))
+
+ggplot(use_peaks3, aes(x = n_peak, y = corrected_rank)) + geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm")
+cor.test(use_peaks3$n_peak, use_peaks3$corrected_rank)
+```
+
+This still doesn't **remove** the correlation. It does make it smaller (0.15 vs 0.23).
+This is probably because not **all** the peaks are lost on the low end, so the correction isn't exactly right.
 
 An alternative method is to use the fitted linear model, and the ratio of the current predicted value to the maximum predicted value.
 I think that should work to transform our correlation to something closer to 0.
+**However, this takes advantage of the fact that we have 200 samples to do the correction with ...**, which is not realistic.
 
 ```{r correct_try2}
 fit_npeak = lm(fractional_rank ~ n_peak, data = use_peaks2)
@@ -171,21 +214,6 @@ out_gam = data.frame(n_peak = use_peaks2$n_peak, fractional_rank = use_peaks2$fr
 write.table(out_gam, file = "testing_stuff/sigmoid_fit.csv", sep = ",", row.names = FALSE,
             col.names = TRUE)
 ```
-
-Hunter thinks we can do it if we adjust it again slightly, using `peak_max / 2` as the factor.
-
-```{r correct_try3}
-use_peaks2 = use_peaks2 %>%
-  dplyr::mutate(rank_ratio3 = n_peak / (max_peaks / 2))
-use_peaks2 = dplyr::mutate(use_peaks2, corrected_rank3 = fractional_rank / rank_ratio3)
-
-ggplot(use_peaks2, aes(x = n_peak, y = corrected_rank3)) + geom_point(alpha = 0.5) +
-  geom_smooth(method = "lm")
-cor.test(use_peaks2$n_peak, use_peaks2$corrected_rank3)
-```
-
-Nope, that doesn't work.
-So the linear model fit looks like the best bet, even if it seems to pull up instead of down ...
 
 ## Verify By Simulation
 
@@ -275,7 +303,7 @@ keep_removed = dplyr::filter(n_insample, n_sample >= 10,
                              dplyr::between(median_rank, 0.4, 0.6))
 ```
 
-```{r plot_removed}
+```{r plot_removed, dev = 'png'}
 removed_keep = dplyr::filter(removed_points, Peak %in% keep_removed$Peak)
 ggplot(removed_keep, aes(x = n_peak, y = new_rank)) + geom_point() +
   geom_smooth(method = "lm")
@@ -283,6 +311,58 @@ ggplot(removed_keep, aes(x = n_peak, y = new_rank)) + geom_point() +
 
 Cool, I had the removal of points incorrect, and was preferentially removing points on the high end.
 Now this is correct, and matches what we've been seeing in our samples above.
+
+### Correction of Simulated Data
+
+Now we can try applying the same correction we derived above on our simulated data.
+
+```{r correction_simulated, dev = 'png'}
+removed_keep = dplyr::mutate(removed_keep, max_peaks = max(n_peak),
+                             model1 = 1 - (n_peak / max_peaks),
+                             model2 = n_peak / max_peaks)
+removed_keep = dplyr::mutate(removed_keep, corrected_rank = model1 + (model2 * new_rank))
+
+ggplot(removed_keep, aes(x = n_peak, y = corrected_rank)) + geom_point() + geom_smooth(method = "lm")
+cor.test(removed_keep$n_peak, removed_keep$corrected_rank)
+```
+
+Yeah, still not working.
+
+What if we try to find the ratio of $$\frac{n_{peak}}{max_{peak}}$$ first?
+
+```{r correction_simualted2, dev = 'png}
+removed_keep = dplyr::mutate(removed_keep, ratio_peaks = n_peak / max_peaks,
+                             ratio_rank = new_rank / org_rank)
+ggplot(removed_keep, aes(x = ratio_peaks, y = ratio_rank)) + geom_point() + geom_smooth(method = "lm")
+
+ratio_fit = lm(ratio_rank ~ ratio_peaks, data = removed_keep)
+removed_keep = dplyr::mutate(removed_keep, corrected_rank2 = new_rank / (0.3 + 0.74*ratio_peaks))
+
+ggplot(removed_keep, aes(x = n_peak, y = corrected_rank2)) + geom_point() + geom_smooth(method = "lm")
+cor.test(removed_keep$n_peak, removed_keep$corrected_rank2)
+```
+
+Neat, this works.
+
+So this makes what we are doing equivalent to:
+
+$$\frac{rank_{observed}}{rank_{true}}=int+slope\times\frac{P_{sample}}{P_{max}}$$
+
+### Apply to Lung Data
+
+Can we apply that same correction to our lung data?
+
+```{r apply_simulated_to_lung}
+use_peaks4 = dplyr::select(use_peaks, imf, Sample_Peak, fraction, rank, n_peak, fractional_rank) %>%
+  dplyr::mutate(max_peaks = max(n_peak),
+                ratio_peaks = n_peak / max_peaks,
+                corrected_rank = fractional_rank / (0.3 + 0.74 * ratio_peaks))
+ggplot(use_peaks4, aes(x = n_peak, y = corrected_rank)) + geom_point() + 
+  geom_smooth(method = "lm")
+cor.test(use_peaks4$n_peak, use_peaks4$corrected_rank)
+```
+
+That's not zero, but that's **really really close**.
 
 ## How Does This Affect Normalization?
 
