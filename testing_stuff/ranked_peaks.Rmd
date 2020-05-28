@@ -330,7 +330,7 @@ Yeah, still not working.
 
 What if we try to find the ratio of $$\frac{n_{peak}}{max_{peak}}$$ first?
 
-```{r correction_simualted2, dev = 'png}
+```{r correction_simualted2, dev = 'png'}
 removed_keep = dplyr::mutate(removed_keep, ratio_peaks = n_peak / max_peaks,
                              ratio_rank = new_rank / org_rank)
 ggplot(removed_keep, aes(x = ratio_peaks, y = ratio_rank)) + geom_point() + geom_smooth(method = "lm")
