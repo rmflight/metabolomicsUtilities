@@ -17,7 +17,7 @@ knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 ## Purpose
 
 Hunter has this idea that we can improve sample-to-sample normalization using relative ranking of peaks based on their intensity ranks.
-So this is me trying to figure out if that will work.
+So this is my attempting to figure out if that will work.
 
 ## Setup
 
@@ -26,6 +26,7 @@ library(dplyr)
 library(visualizationQualityControl)
 library(smirfeTools)
 library(ggplot2)
+library(rlang)
 theme_set(cowplot::theme_cowplot())
 ```
 
@@ -40,13 +41,20 @@ voted_data = readRDS("testing_stuff/lung_voted_all.rds")
 imf_data = extract_imf_emf_data(voted_data, by = "IMF")
 ```
 
-## Analysis
-
-```{r peak_correspondence}
+```{r functions}
 calc_rank = function(values){
   rank(values, ties.method = "random") / length(values)
 }
 
+calc_median_rank = function(peak_df, rank_column = fractional_rank){
+  dplyr::group_by(peak_df, imf) %>%
+    dplyr::summarise(median_rank = median({{rank_column}}))
+}
+```
+
+## Analysis
+
+```{r peak_correspondence}
 imf_peaks = imf_data$peaks
 peak_counts = apply(imf_peaks, 1, function(.x){sum(!is.na(.x))})
 n_sample = ncol(imf_peaks)
@@ -78,15 +86,16 @@ all_peaks = dplyr::left_join(all_peaks, n_peak_sample, by = "Sample")
 
 imf_ranks = dplyr::left_join(imf_2_peak, all_peaks[, c("Sample_Peak", "fractional_rank", "n_peak")], by = "Sample_Peak")
 
-imf_median_rank = dplyr::group_by(imf_ranks, imf) %>%
-  dplyr::summarize(median_rank = median(fractional_rank))
-imf_median_rank = dplyr::left_join(imf_median_rank, peak_frac_df, by = "imf")
+imf_median_rank = imf_ranks %>% 
+  dplyr::group_by(imf) %>%
+  dplyr::summarise(median_org = median(fractional_rank)) %>%
+  dplyr::left_join(., peak_frac_df, by = "imf")
 ```
 
 Let's see if the data that Hunter would want to use even exists!
 
 ```{r check_fractions_vs_rank}
-ggplot(imf_median_rank, aes(x = median_rank, y = fraction)) + geom_point(alpha = 0.5) +
+ggplot(imf_median_rank, aes(x = median_org, y = fraction)) + geom_point(alpha = 0.5) +
   geom_vline(xintercept = 0.5, color = "red") +
   geom_hline(yintercept = 0.8, color = "red") +
   labs(subtitle = "Median Rank across Samples vs Fraction of Total Samples",
@@ -97,11 +106,10 @@ OK, I previously messed up the rank within a sample, in that a lower number prev
 **Now it is right!**
 A higher number in a sample means it is more highly ranked in the sample.
 
-But we are going to try anyway.
 The next step then is to look at the peaks that appear in a decent number of samples, say **10** (so a fraction >= 0.05), and let's slice it down to things that are in the range of 0.5 median ranked across samples, using a range of 0.4 to 0.6.
 
 ```{r plot_points_inrange}
-ggplot(imf_median_rank, aes(x = median_rank, y = fraction)) + geom_point(alpha = 0.5) +
+ggplot(imf_median_rank, aes(x = median_org, y = fraction)) + geom_point(alpha = 0.5) +
   xlim(0.4, 0.6) + 
   geom_hline(yintercept = 0.05, color = "red") +
   labs(subtitle = "Median Rank across Samples vs Fraction of Total Samples",
@@ -109,7 +117,7 @@ ggplot(imf_median_rank, aes(x = median_rank, y = fraction)) + geom_point(alpha =
 ```
 
 ```{r trim_data}
-trim_ranks = dplyr::filter(imf_median_rank, dplyr::between(median_rank, 0.4, 0.6),
+trim_ranks = dplyr::filter(imf_median_rank, dplyr::between(median_rank, 0.6, 0.8),
                            fraction >= 0.055)
 
 use_peaks = dplyr::filter(imf_2_peak, imf %in% trim_ranks$imf) %>%
@@ -122,27 +130,6 @@ cor.test(use_peaks$n_peak, use_peaks$fractional_rank)
 
 OK, there is definitely a positive correlation between the fractional rank of a peak and the number of peaks in the sample.
 Now, can we correct it and make the correlation value lower?
-
-Hunter thinks the correction should be:
-
-$$\frac{(P_{max}/2) - P_{missing}}{P_{max} - P_{missing}}$$
-
-where $P_{missing} = P_{max} - P_{sample}$
-
-```{r correct_data}
-max_peaks = max(use_peaks$n_peak)
-
-use_peaks2 = dplyr::select(use_peaks, imf, Sample_Peak, fraction, rank, n_peak, fractional_rank) %>%
-  dplyr::mutate(p_missing = max_peaks - n_peak)
-use_peaks2 = dplyr::mutate(use_peaks2, correction_factor = ((max_peaks/2) - p_missing) / (max_peaks - p_missing))
-use_peaks2 = dplyr::mutate(use_peaks2, corrected_rank = fractional_rank * (1 - correction_factor))
-
-ggplot(use_peaks2, aes(x = n_peak, y = corrected_rank)) + geom_point(alpha = 0.5) +
-  geom_smooth(method = "lm")
-cor.test(use_peaks2$n_peak, use_peaks2$corrected_rank)
-```
-
-OK, this doesn't work, and now I don't know why.
 
 Let's try a simple example.
 
@@ -166,19 +153,28 @@ $$rank_{org} = (1 - \frac{P_{sample}}{P_{max}})+ \frac{P_{sample}}{P_{max}} \tim
 
 Let's see if we can get this to work on our actual data.
 
-```{r correct_data2}
-max_peaks = 3500
-use_peaks3 = dplyr::select(use_peaks, imf, Sample_Peak, fraction, rank, n_peak, fractional_rank) %>%
-  dplyr::mutate(model1 = 1 - (n_peak / max_peaks),
-                model2 = n_peak / max_peaks)
-use_peaks3 = dplyr::mutate(use_peaks3, corrected_rank = model1 + (model2 * fractional_rank))
+```{r correct_data}
+imf_ranks = dplyr::filter(imf_ranks, fraction >= 0.057) %>%
+  dplyr::left_join(., imf_median_rank, by = "imf")
+imf_rank_corrected = dplyr::mutate(imf_ranks, max_peaks = max(n_peak),
+                                   model1 = 1 - (n_peak / max_peaks),
+                                   model2 = n_peak / max_peaks,
+                                   lc_rank = model1 + (model2 * fractional_rank))
 
-ggplot(use_peaks3, aes(x = n_peak, y = corrected_rank)) + geom_point(alpha = 0.5) +
+lc_median = imf_rank_corrected %>% dplyr::group_by(imf) %>%
+  dplyr::summarise(median_lc = median(lc_rank)) %>%
+  dplyr::left_join(., imf_rank_corrected, by = "imf")
+
+ggplot(dplyr::filter(lc_median, dplyr::between(median_lc, 0.65, 0.75)), aes(x = n_peak, y = lc_rank)) +
+  geom_point() +
   geom_smooth(method = "lm")
-cor.test(use_peaks3$n_peak, use_peaks3$corrected_rank)
+
+cor.test(~ lc_rank + n_peak, data = dplyr::filter(lc_median, dplyr::between(median_lc, 0.65, 0.75)))
 ```
 
-This still doesn't **remove** the correlation. It does make it smaller (0.15 vs 0.23).
+So, we did the correction, and then we calculated new medians, and made sure to evaluate based on those new median values.
+**And it appears to be an over-correction.**
+
 This is probably because not **all** the peaks are lost on the low end, so the correction isn't exactly right.
 
 An alternative method is to use the fitted linear model, and the ratio of the current predicted value to the maximum predicted value.
@@ -186,17 +182,25 @@ I think that should work to transform our correlation to something closer to 0.
 **However, this takes advantage of the fact that we have 200 samples to do the correction with ...**, which is not realistic.
 
 ```{r correct_try2}
-fit_npeak = lm(fractional_rank ~ n_peak, data = use_peaks2)
-fitted_ranks = fit_npeak$fitted.values
-use_peaks2$rank_ratio = fitted_ranks / max(fitted_ranks)
-use_peaks2 = dplyr::mutate(use_peaks2, corrected_rank2 = fractional_rank / rank_ratio)
+tmp_data = as.data.frame(dplyr::filter(lc_median, dplyr::between(median_org, 0.65, 0.75)))
+fit_npeak = lm(fractional_rank ~ n_peak, data = tmp_data)
+rank_lookup = data.frame(n_peak = tmp_data$n_peak, fit_rank = fit_npeak$fitted.values) %>% unique(.)
+rank_lookup = rank_lookup[!duplicated(rank_lookup$n_peak), ]
+rank_lookup = rank_lookup[order(rank_lookup$n_peak), ]
+rank_lookup = dplyr::mutate(rank_lookup, rank_ratio = fit_rank / max(fit_rank))
+lc_median = dplyr::left_join(lc_median, rank_lookup, by = "n_peak")
+corrected_ratiofit = dplyr::mutate(lc_median, ratiofit_rank = fractional_rank / rank_ratio)
 
-ggplot(use_peaks2, aes(x = n_peak, y = corrected_rank2)) + geom_point(alpha = 0.5) +
+lc_median = corrected_ratiofit %>%
+  dplyr::group_by(imf) %>%
+  dplyr::summarise(median_rf = median(ratiofit_rank)) %>%
+  dplyr::left_join(., lc_median, by = "imf")
+ggplot(dplyr::filter(lc_median, dplyr::between(median_rf, 0.65, 0.75)), aes(x = n_peak, y = median_rf)) + geom_point() +
   geom_smooth(method = "lm")
-cor.test(use_peaks2$n_peak, use_peaks2$corrected_rank2)
+cor.test(~ n_peak + median_rf, data = dplyr::filter(lc_median, dplyr::between(median_rf, 0.65, 0.75)))
 ```
 
-**And the correlation is gone!** The 95% CI on the test is now: -0.02 - 0.02.
+**And the correlation is gone!** The 95% CI on the test is now: -0.02 - 0.031.
 
 ```{r fits}
 fit_npeak
@@ -387,3 +391,12 @@ But that also begs the question, do we need to use peaks for normalization that 
 ((max_peaks/2) - missing_peaks)/(max_peaks - missing_peaks) 
 
 where missing peaks = max_peaks - curr_peaks
+
+## Truly Evaluating Solutions
+
+To truly evaluate what we've done, we need to make sure of two things:
+
+  1. We are looking at correlation with peaks that have their rank adjusted, and then re-evaluated for median rank across samples
+  1. We look at some actual metrics. These include:
+    * The variance of normalized peaks using one of these corrections vs none vs median intensity normalization
+    * The change in p-values of cancer vs non-cancer using the various methods to correct
