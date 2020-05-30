@@ -117,7 +117,7 @@ ggplot(imf_median_rank, aes(x = median_org, y = fraction)) + geom_point(alpha = 
 ```
 
 ```{r trim_data}
-trim_ranks = dplyr::filter(imf_median_rank, dplyr::between(median_rank, 0.6, 0.8),
+trim_ranks = dplyr::filter(imf_median_rank, dplyr::between(median_org, 0.6, 0.8),
                            fraction >= 0.055)
 
 use_peaks = dplyr::filter(imf_2_peak, imf %in% trim_ranks$imf) %>%
@@ -194,7 +194,7 @@ corrected_ratiofit = dplyr::mutate(lc_median, ratiofit_rank = fractional_rank / 
 lc_median = corrected_ratiofit %>%
   dplyr::group_by(imf) %>%
   dplyr::summarise(median_rf = median(ratiofit_rank)) %>%
-  dplyr::left_join(., lc_median, by = "imf")
+  dplyr::left_join(., corrected_ratiofit, by = "imf")
 ggplot(dplyr::filter(lc_median, dplyr::between(median_rf, 0.65, 0.75)), aes(x = n_peak, y = median_rf)) + geom_point() +
   geom_smooth(method = "lm")
 cor.test(~ n_peak + median_rf, data = dplyr::filter(lc_median, dplyr::between(median_rf, 0.65, 0.75)))
@@ -202,27 +202,11 @@ cor.test(~ n_peak + median_rf, data = dplyr::filter(lc_median, dplyr::between(me
 
 **And the correlation is gone!** The 95% CI on the test is now: -0.02 - 0.031.
 
-```{r fits}
-fit_npeak
-
-out_fit = data.frame(n_peak = use_peaks2$n_peak, fractional_rank = use_peaks2$fractional_rank, fitted_rank = fit_npeak$fitted.values)
-write.table(out_fit, file = "testing_stuff/linear_fit.csv", sep = ",", row.names = FALSE, col.names = TRUE)
-```
-
-There is actually a sigmoidal fit, which we can see if we use a `glm` model.
-
-```{r sigmoid_fit}
-gam_fit = mgcv::gam(fractional_rank ~ s(n_peak, bs = "cs"), data = use_peaks2)
-
-out_gam = data.frame(n_peak = use_peaks2$n_peak, fractional_rank = use_peaks2$fractional_rank, fitted_rank = gam_fit$fitted.values)
-write.table(out_gam, file = "testing_stuff/sigmoid_fit.csv", sep = ",", row.names = FALSE,
-            col.names = TRUE)
-```
 
 ## Verify By Simulation
 
 So I wonder if we can verify this is what happens using a simulation?
-If we take say 200 samples, with 4500 peaks, and then let up to 1/2 of the mostly lower intensity ones get dropped, do we see the same phenomena?
+If we take say 200 samples, with 4500 peaks, and then let up to 0.6 of the mostly lower intensity ones get dropped, do we see the same phenomena?
 The nice thing is, because we are talking about ranks (essentially quantiles) they are actually distribution agnostic.
 
 ```{r simulate_dropout}
@@ -242,8 +226,8 @@ drop_prob = floor(drop_prob)
 ```
 
 My strategy for this is going to be:
-  * Coin toss
-  * Probability of Remove / Keep is going to start at 0.9 / 0.1 and decrease to 0.5 / 0.5 as calculated rank approaches 0.5
+  * Coin toss for each peak
+  * Probability of being discarded in the coin toss is **directly** weighted by it's relative rank
   * Continue removing points until we reach number of points to remove (based on `drop_prob` above)
   * This should allow low intensity points to be kept at random and also remove random points above a rank of 0.5
 
@@ -303,31 +287,33 @@ removed_points = dplyr::left_join(removed_points, removed_npeak, by = "Sample")
 n_insample = dplyr::group_by(removed_points, Peak) %>%
   dplyr::summarise(n_sample = dplyr::n(),
                    median_rank = median(new_rank))
-keep_removed = dplyr::filter(n_insample, n_sample >= 10,
-                             dplyr::between(median_rank, 0.4, 0.6))
+keep_removed = dplyr::filter(n_insample, n_sample >= 10)
 ```
 
 ```{r plot_removed, dev = 'png'}
-removed_keep = dplyr::filter(removed_points, Peak %in% keep_removed$Peak)
-ggplot(removed_keep, aes(x = n_peak, y = new_rank)) + geom_point() +
+removed_keep = dplyr::left_join(keep_removed, removed_points, by = "Peak")
+ggplot(dplyr::filter(removed_keep, dplyr::between(median_rank, 0.65, 0.75)), aes(x = n_peak, y = new_rank)) + geom_point() +
   geom_smooth(method = "lm")
 ```
 
-Cool, I had the removal of points incorrect, and was preferentially removing points on the high end.
-Now this is correct, and matches what we've been seeing in our samples above.
+**Cool!!** It matches at least somewhat what we were seeing previously.
 
 ### Correction of Simulated Data
 
 Now we can try applying the same correction we derived above on our simulated data.
 
 ```{r correction_simulated, dev = 'png'}
-removed_keep = dplyr::mutate(removed_keep, max_peaks = max(n_peak),
+corrected_keep = dplyr::mutate(removed_keep, max_peaks = max(n_peak),
                              model1 = 1 - (n_peak / max_peaks),
                              model2 = n_peak / max_peaks)
-removed_keep = dplyr::mutate(removed_keep, corrected_rank = model1 + (model2 * new_rank))
+corrected_keep = dplyr::mutate(corrected_keep, lc_rank = model1 + (model2 * new_rank))
 
-ggplot(removed_keep, aes(x = n_peak, y = corrected_rank)) + geom_point() + geom_smooth(method = "lm")
-cor.test(removed_keep$n_peak, removed_keep$corrected_rank)
+removed_keep = corrected_keep %>%
+  dplyr::group_by(Peak) %>%
+  dplyr::summarise(median_lc = median(lc_rank)) %>%
+  dplyr::left_join(., corrected_keep, by = "Peak")
+ggplot(dplyr::filter(removed_keep, dplyr::between(median_lc, 0.65, 0.75)), aes(x = n_peak, y = lc_rank)) + geom_point() + geom_smooth(method = "lm")
+cor.test(~ n_peak + lc_rank, dplyr::filter(removed_keep, dplyr::between(median_lc, 0.65, 0.75)))
 ```
 
 Yeah, still not working.
@@ -337,46 +323,187 @@ What if we try to find the ratio of $$\frac{n_{peak}}{max_{peak}}$$ first?
 ```{r correction_simualted2, dev = 'png'}
 removed_keep = dplyr::mutate(removed_keep, ratio_peaks = n_peak / max_peaks,
                              ratio_rank = new_rank / org_rank)
-ggplot(removed_keep, aes(x = ratio_peaks, y = ratio_rank)) + geom_point() + geom_smooth(method = "lm")
+ggplot(dplyr::filter(removed_keep, dplyr::between(median_rank, 0.65, 0.75)), aes(x = ratio_peaks, y = ratio_rank)) + geom_point() + geom_smooth(method = "lm")
 
-ratio_fit = lm(ratio_rank ~ ratio_peaks, data = removed_keep)
-removed_keep = dplyr::mutate(removed_keep, corrected_rank2 = new_rank / (0.3 + 0.74*ratio_peaks))
+ratio_fit = lm(ratio_rank ~ ratio_peaks, data = dplyr::filter(removed_keep, dplyr::between(median_rank, 0.65, 0.75)))
+rr_corrected_keep = dplyr::mutate(removed_keep, rr_rank = new_rank / (0.61 + 0.42*ratio_peaks))
 
-ggplot(removed_keep, aes(x = n_peak, y = corrected_rank2)) + geom_point() + geom_smooth(method = "lm")
-cor.test(removed_keep$n_peak, removed_keep$corrected_rank2)
+removed_keep = rr_corrected_keep %>%
+  dplyr::group_by(Peak) %>%
+  dplyr::summarise(rr_median = median(rr_rank)) %>%
+  dplyr::left_join(., rr_corrected_keep, by = "Peak")
+
+ggplot(dplyr::filter(removed_keep, dplyr::between(rr_median, 0.65, 0.75)), aes(x = n_peak, y = rr_rank)) + geom_point() + geom_smooth(method = "lm")
+cor.test(~ n_peak + rr_rank, dplyr::filter(removed_keep, dplyr::between(rr_median, 0.65, 0.75)))
 ```
 
-Neat, this works.
+Good thing Hunter realized I wasn't plotting what I thought I was, **because this last solution doesn't work**.
+**Crud**.
 
-So this makes what we are doing equivalent to:
+So right now the best option is the one that involves the fit to the whole data, I think.
+Let's see if that works here.
 
-$$\frac{rank_{observed}}{rank_{true}}=int+slope\times\frac{P_{sample}}{P_{max}}$$
+```{r simulation_fit_ratio}
+tmp_sim = dplyr::filter(removed_keep, dplyr::between(median_rank, 0.65, 0.75))
+tmp_fit = lm(new_rank ~ n_peak, data = tmp_sim)
+sim_lookup = data.frame(n_peak = tmp_sim$n_peak, fit_rank = tmp_fit$fitted.values) %>% unique(.)
+sim_lookup = sim_lookup[!duplicated(sim_lookup$n_peak), ]
+sim_lookup = dplyr::mutate(sim_lookup, rank_ratio = fit_rank / max(fit_rank))
+removed_keep = dplyr::left_join(removed_keep, sim_lookup, by = "n_peak")
 
-### Apply to Lung Data
+corrected_lookup = dplyr::mutate(removed_keep, ll_rank = new_rank / rank_ratio)
+removed_keep = corrected_lookup %>%
+  dplyr::group_by(Peak) %>%
+  dplyr::summarise(ll_median = median(ll_rank)) %>%
+  dplyr::left_join(., corrected_lookup)
 
-Can we apply that same correction to our lung data?
-
-```{r apply_simulated_to_lung}
-use_peaks4 = dplyr::select(use_peaks, imf, Sample_Peak, fraction, rank, n_peak, fractional_rank) %>%
-  dplyr::mutate(max_peaks = max(n_peak),
-                ratio_peaks = n_peak / max_peaks,
-                corrected_rank = fractional_rank / (0.3 + 0.74 * ratio_peaks))
-ggplot(use_peaks4, aes(x = n_peak, y = corrected_rank)) + geom_point() + 
-  geom_smooth(method = "lm")
-cor.test(use_peaks4$n_peak, use_peaks4$corrected_rank)
+ggplot(dplyr::filter(removed_keep, dplyr::between(ll_median, 0.65, 0.75)), aes(x = n_peak, y = ll_rank)) + 
+  geom_point() + geom_smooth(method = "lm")
 ```
 
-That's not zero, but that's **really really close**.
+Nope, that doesn't even work on the simulated data.
+That doesn't mean it's not a bad option.
+It also might be related to the structure of our simulated data compared to the real data.
+
 
 ## How Does This Affect Normalization?
 
-OK, we can correct the ranking of peaks within a sample.
-So how does this affect normalization?
+We are going to calculate some metrics after we do normalization a couple of different ways.
 
-If we correct the ranking of **all** peaks in **all** samples, then we have a much better idea of **which** peaks actually have ranks close to **0.5** in a majority of samples, if they exist.
+### Metrics
 
-We should be using peaks with a median rank close to **0.5** to normalize samples.
-We can test this by doing a p-value comparison, similar to what we've done previously (code which I need to find).
+1. Relative Standard Deviation of peak intensities
+1. P-values of not-cancer vs cancer
+
+### Normalization Methods
+
+1. Median peak intensity (**median**)
+1. Peak ranked at 0.5 in a sample (**n50**)
+1. Peak ranked at 0.7 in a sample (**n70**)
+1. Peak ranked most consistently at 0.5 / 0.7 (**close50/70**)
+
+### Do It!
+
+```{r raw_rsd}
+lc_median_intensity = dplyr::left_join(lc_median, all_peaks[, c("Sample_Peak", "Height", "Sample")], by = "Sample_Peak")
+lc_median_intensity = dplyr::mutate(lc_median_intensity,
+                                    type = dplyr::case_when(
+                                      grepl("Npos.*", Sample, ignore.case = TRUE) ~ "non-cancer",
+                                      TRUE ~ "cancer"
+                                    ))
+raw_rsd = lc_median_intensity %>% 
+  dplyr::group_by(imf, type) %>%
+  dplyr::summarise(mean = mean(Height),
+                   sd = sd(Height),
+                   rsd = sd / mean,
+                   which = "raw")
+```
+
+```{r median_normalization}
+lung_json = readRDS("testing_stuff/lung_all_json.rds")
+lung_norm = purrr::map_df(lung_json, function(in_json){
+  data.frame(Value = in_json$peak$other_info$median_intensity,
+             Sample = gsub(".zip$", "", in_json$zip$file),
+             stringsAsFactors = FALSE)
+})
+
+mediannorm_rsd = dplyr::left_join(lc_median_intensity, lung_norm, by = "Sample") %>%
+  dplyr::mutate(Height_mediannorm = Height / Value) %>%
+  dplyr::group_by(imf, type) %>%
+  dplyr::summarise(mean = mean(Height_mediannorm),
+                   sd = sd(Height_mediannorm),
+                   rsd = sd / mean,
+                   which = "median")
+```
+
+```{r rank_50_70}
+lc_median_intensity = dplyr::mutate(lc_median_intensity, diff_50 = abs(ratiofit_rank - 0.5),
+                                    diff_70 = abs(ratiofit_rank - 0.7))
+norm_50 = lc_median_intensity %>% 
+  dplyr::group_by(Sample) %>%
+  dplyr::arrange(diff_50) %>%
+  dplyr::slice(1) %>%
+  dplyr::select(Height, Sample) %>%
+  dplyr::mutate(Value = Height)
+norm_50_rsd = dplyr::left_join(lc_median_intensity, norm_50[, c("Sample", "Value")], by = "Sample") %>%
+  dplyr::mutate(Height_norm50 = Height / Value) %>%
+  dplyr::group_by(imf, type) %>%
+  dplyr::summarise(mean = mean(Height_norm50),
+                   sd = sd(Height_norm50),
+                   rsd = sd / mean,
+                   which = "n50")
+
+norm_70 = lc_median_intensity %>% 
+  dplyr::group_by(Sample) %>%
+  dplyr::arrange(diff_70) %>%
+  dplyr::slice(1) %>%
+  dplyr::select(Height, Sample) %>%
+  dplyr::mutate(Value = Height)
+norm_70_rsd = dplyr::left_join(lc_median_intensity, norm_70[, c("Sample", "Value")], by = "Sample") %>%
+  dplyr::mutate(Height_norm70 = Height / Value) %>%
+  dplyr::group_by(imf, type) %>%
+  dplyr::summarise(mean = mean(Height_norm70),
+                   sd = sd(Height_norm70),
+                   rsd = sd / mean,
+                   which = "n70")
+```
+
+```{r most_consistent_5070}
+n_imf = lc_median_intensity %>%
+  dplyr::group_by(imf) %>%
+  dplyr::summarise(n_sample = dplyr::n())
+
+use_imf = dplyr::filter(n_imf, n_sample >= 150)
+lc_use_imf = dplyr::left_join(use_imf, lc_median_intensity, by = "imf")
+most_close50 = lc_use_imf %>%
+  dplyr::group_by(imf) %>%
+  dplyr::summarise(sum_50 = sum(diff_50)) %>%
+  dplyr::arrange(sum_50) %>%
+  dplyr::slice(1)
+norm_close50 = dplyr::left_join(most_close50, lc_median_intensity, by = "imf") %>%
+  dplyr::select(Height, Sample) %>%
+  dplyr::mutate(Value = Height)
+norm_close50_rsd = dplyr::left_join(norm_close50[, c("Sample", "Value")], lc_median_intensity, by = "Sample") %>%
+  dplyr::mutate(Height_close50 = Height / Value) %>%
+  dplyr::group_by(imf, type) %>%
+  dplyr::summarise(mean = mean(Height_close50),
+                   sd = sd(Height_close50),
+                   rsd = sd /mean,
+                   which = "close50")
+
+most_close70 = lc_use_imf %>%
+  dplyr::group_by(imf) %>%
+  dplyr::summarise(sum_70 = sum(diff_70)) %>%
+  dplyr::arrange(sum_70) %>%
+  dplyr::slice(1)
+norm_close70 = dplyr::left_join(most_close70, lc_median_intensity, by = "imf") %>%
+  dplyr::select(Height, Sample) %>%
+  dplyr::mutate(Value = Height)
+norm_close70_rsd = dplyr::left_join(norm_close70[, c("Sample", "Value")], lc_median_intensity, by = "Sample") %>%
+  dplyr::mutate(Height_close70 = Height / Value) %>%
+  dplyr::group_by(imf, type) %>%
+  dplyr::summarise(mean = mean(Height_close70),
+                   sd = sd(Height_close70),
+                   rsd = sd /mean,
+                   which = "close70")
+```
+
+### Compare RSDs
+
+```{r compare_rsd}
+all_rsd = rbind(norm_50_rsd, norm_70_rsd, norm_close50_rsd, norm_close70_rsd, mediannorm_rsd, raw_rsd)
+all_rsd$which_type = paste0(all_rsd$type, "_", all_rsd$which)
+library(ggridges)
+ggplot(all_rsd, aes(x = rsd, y = which_type)) + geom_density_ridges() +
+  coord_cartesian(xlim = c(0, 1.5)) + geom_vline(xintercept = 0.33, color = "red") +
+  labs(caption = "Density RSDs using each type of normalization, with a red line at 0.33, \nthe mode for non-cancer median, n50 and n70")
+```
+
+```{r table_of_medians}
+knitr::kable(dplyr::group_by(all_rsd, which_type) %>%
+  dplyr::summarise(median_rsd = median(rsd, na.rm = TRUE)), digits = 3)
+
+```
 
 ### But Wait ...
 
