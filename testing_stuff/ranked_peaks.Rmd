@@ -19,6 +19,8 @@ knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 Hunter has this idea that we can improve sample-to-sample normalization using relative ranking of peaks based on their intensity ranks.
 So this is my attempting to figure out if that will work.
 
+See the [conclusions](#conclusions) for my final summary.
+
 ## Setup
 
 ```{r setup_packages}
@@ -27,6 +29,7 @@ library(visualizationQualityControl)
 library(smirfeTools)
 library(ggplot2)
 library(rlang)
+library(ggridges)
 theme_set(cowplot::theme_cowplot())
 ```
 
@@ -381,6 +384,10 @@ We are going to calculate some metrics after we do normalization a couple of dif
 1. Peak ranked at 0.5 in a sample (**n50**)
 1. Peak ranked at 0.7 in a sample (**n70**)
 1. Peak ranked most consistently at 0.5 / 0.7 (**close50/70**)
+1. Sum of up to 200 peaks that are <= 0.9 rank (**under90**) using either:
+  * original ranks (**org**)
+  * ratiofit ranks (**fit**)
+  * analytical correction (**anal**)
 
 ### Do It!
 
@@ -417,35 +424,30 @@ mediannorm_rsd = dplyr::left_join(lc_median_intensity, lung_norm, by = "Sample")
 ```
 
 ```{r rank_50_70}
-lc_median_intensity = dplyr::mutate(lc_median_intensity, diff_50 = abs(ratiofit_rank - 0.5),
-                                    diff_70 = abs(ratiofit_rank - 0.7))
-norm_50 = lc_median_intensity %>% 
-  dplyr::group_by(Sample) %>%
-  dplyr::arrange(diff_50) %>%
-  dplyr::slice(1) %>%
-  dplyr::select(Height, Sample) %>%
-  dplyr::mutate(Value = Height)
-norm_50_rsd = dplyr::left_join(lc_median_intensity, norm_50[, c("Sample", "Value")], by = "Sample") %>%
-  dplyr::mutate(Height_norm50 = Height / Value) %>%
-  dplyr::group_by(imf, type) %>%
-  dplyr::summarise(mean = mean(Height_norm50),
-                   sd = sd(Height_norm50),
-                   rsd = sd / mean,
-                   which = "n50")
+calc_rank_rsd = function(lc_median_intensity, rank = 0.5, label = "n50"){
+  rank_norm = lc_median_intensity %>%
+    dplyr::mutate(diff_rank = abs(ratiofit_rank - {{rank}})) %>%
+    dplyr::group_by(Sample) %>%
+    dplyr::arrange(diff_rank) %>%
+    dplyr::slice(1) %>%
+    dplyr::select(Height, Sample) %>%
+    dplyr::mutate(Value = Height)
+  norm_rsd = dplyr::left_join(lc_median_intensity, rank_norm[, c("Sample", "Value")], by = "Sample") %>%
+    dplyr::mutate(HeightNorm = Height / Value) %>%
+    dplyr::group_by(imf, type) %>%
+    dplyr::summarise(mean = mean(HeightNorm),
+                     sd = sd(HeightNorm),
+                     rsd = sd / mean,
+                     which = {{label}})
+  norm_rsd
+}
 
-norm_70 = lc_median_intensity %>% 
-  dplyr::group_by(Sample) %>%
-  dplyr::arrange(diff_70) %>%
-  dplyr::slice(1) %>%
-  dplyr::select(Height, Sample) %>%
-  dplyr::mutate(Value = Height)
-norm_70_rsd = dplyr::left_join(lc_median_intensity, norm_70[, c("Sample", "Value")], by = "Sample") %>%
-  dplyr::mutate(Height_norm70 = Height / Value) %>%
-  dplyr::group_by(imf, type) %>%
-  dplyr::summarise(mean = mean(Height_norm70),
-                   sd = sd(Height_norm70),
-                   rsd = sd / mean,
-                   which = "n70")
+df_norm = data.frame(rank = c(0.1, 0.25, 0.33, 0.5, 0.7, 0.9),
+                     label = c("n10", "n25", "n33", "n50", "n70", "n90"))
+
+nrank_rsd = purrr::map_df(seq(1, nrow(df_norm)), function(in_row){
+  calc_rank_rsd(lc_median_intensity, df_norm[in_row, "rank"], df_norm[in_row, "label"])
+})
 ```
 
 ```{r most_consistent_5070}
@@ -454,7 +456,9 @@ n_imf = lc_median_intensity %>%
   dplyr::summarise(n_sample = dplyr::n())
 
 use_imf = dplyr::filter(n_imf, n_sample >= 150)
-lc_use_imf = dplyr::left_join(use_imf, lc_median_intensity, by = "imf")
+lc_use_imf = dplyr::left_join(use_imf, lc_median_intensity, by = "imf") %>%
+  dplyr::mutate(diff_50 = abs(ratiofit_rank - 0.5),
+                diff_70 = abs(ratiofit_rank - 0.7))
 most_close50 = lc_use_imf %>%
   dplyr::group_by(imf) %>%
   dplyr::summarise(sum_50 = sum(diff_50)) %>%
@@ -491,10 +495,31 @@ norm_close70_rsd = dplyr::left_join(norm_close70[, c("Sample", "Value")], lc_med
 ### Compare RSDs
 
 ```{r compare_rsd}
-all_rsd = rbind(norm_50_rsd, norm_70_rsd, norm_close50_rsd, norm_close70_rsd, mediannorm_rsd, raw_rsd)
+mode_value = function(values){
+  values = values[!is.na(values)]
+  density_estimate = stats::density(values)
+  mode_value = density_estimate$x[which.max(density_estimate$y)]
+  mode_value
+}
+mode_peak = function(values){
+  values = values[!is.na(values)]
+  density_estimate = stats::density(values)
+  mode_value = density_estimate$x[which.max(density_estimate$y)]
+  peak_mode = max(density_estimate$y)
+  peak_mode
+}
+mode_fraction = function(values){
+  values = values[!is.na(values)]
+  density_estimate = stats::density(values)
+  mode_value = density_estimate$x[which.max(density_estimate$y)]
+  peak_mode = max(density_estimate$y)
+  fraction_less_mode = sum(values <= mode_value) / length(values)
+  fraction_less_mode
+}
+all_rsd = rbind(nrank_rsd, mediannorm_rsd, raw_rsd, norm_close70_rsd, norm_close50_rsd)
 all_rsd$which_type = paste0(all_rsd$type, "_", all_rsd$which)
-library(ggridges)
-ggplot(all_rsd, aes(x = rsd, y = which_type)) + geom_density_ridges() +
+
+ggplot(dplyr::filter(all_rsd, type %in% "non-cancer"), aes(x = rsd, y = which_type)) + geom_density_ridges() +
   coord_cartesian(xlim = c(0, 1.5)) + geom_vline(xintercept = 0.33, color = "red") +
   labs(caption = "Density RSDs using each type of normalization, with a red line at 0.33, \nthe mode for non-cancer median, n50 and n70")
 ```
@@ -503,27 +528,165 @@ ggplot(all_rsd, aes(x = rsd, y = which_type)) + geom_density_ridges() +
 knitr::kable(dplyr::group_by(all_rsd, which_type) %>%
   dplyr::summarise(median_rsd = median(rsd, na.rm = TRUE)), digits = 3)
 
+knitr::kable(dplyr::group_by(all_rsd, which_type) %>%
+  dplyr::summarise(mode = mode_value(rsd),
+                   height = mode_peak(rsd),
+                   fraction = mode_fraction(rsd)), digits = 2)
+
 ```
 
-### But Wait ...
+### Calculate & Compare P-Values
 
-Is the ratio of the median to the max intensity affected the same way?
-If it is, that implies that we could simply adjust the median value using this same correction, and then still correct by the median.
-I bring this up because I don't think we will find many peaks that will be ranked near the middle of the pack.
+```{r calculate_pvalues}
+calc_ttest = function(data, sample_class){
+  split_data = split(data, sample_class)
+  n_split = purrr::map_int(split_data, length)
+  if (sum(n_split >= 3) == 2){
+    t_res = t.test(split_data[[1]], split_data[[2]])
+    p_value = t_res$p.value
+  } else {
+    p_value = 1
+  }
+}
+  
+calculate_pvalues = function(lc_median_intensity, rank = 0.5, label = "n50"){
+  rank_norm = lc_median_intensity %>%
+    dplyr::mutate(diff_rank = abs(ratiofit_rank - {{rank}})) %>%
+    dplyr::group_by(Sample) %>%
+    dplyr::arrange(diff_rank) %>%
+    dplyr::slice(1) %>%
+    dplyr::select(Height, Sample) %>%
+    dplyr::mutate(Value = Height)
+  norm_intensity = dplyr::left_join(lc_median_intensity, rank_norm[, c("Sample", "Value")], by = "Sample") %>%
+    dplyr::mutate(HeightNorm = Height / Value)
+  
+  imf_pvalues = norm_intensity %>%
+    dplyr::group_by(imf) %>%
+    dplyr::summarise(p_value = -1 * log10(calc_ttest(HeightNorm, type)),
+                     label = label)
+  
+  imf_pvalues
+}
+```
 
-But that also begs the question, do we need to use peaks for normalization that are near the center, or can we use anything that is **consistently** ranked the same (after above correction) across samples??
+```{r calculate_compare_pvalues}
+mediannorm_pvalues = dplyr::left_join(lc_median_intensity, lung_norm, by = "Sample") %>%
+  dplyr::mutate(HeightNorm = Height / Value) %>%
+  dplyr::group_by(imf) %>%
+  dplyr::summarise(p_value = -1 * log10(calc_ttest(HeightNorm, type)),
+                   label = "median")
 
-## Hunter Comments on Correction
+othernorm_pvalues = purrr::map(seq(1, nrow(df_norm)), function(in_row){
+  calculate_pvalues(lc_median_intensity, df_norm[in_row, "rank"], df_norm[in_row, "label"])
+})
 
-((max_peaks/2) - missing_peaks)/(max_peaks - missing_peaks) 
+compared_pvalues = purrr::map_df(othernorm_pvalues, function(in_pvalue){
+  compare_table = dplyr::left_join(mediannorm_pvalues, in_pvalue, by = "imf")
+  compare_table = dplyr::filter(compare_table, !((p_value.x == 0) & (p_value.y == 0)))
+  compare_table = compare_table %>%
+    dplyr::mutate(diff = p_value.y - p_value.x,
+                  label = paste0(in_pvalue$label[1], "_", mediannorm_pvalues$label[1]))
+  compare_table
+})
 
-where missing peaks = max_peaks - curr_peaks
+ggplot(compared_pvalues, aes(x = diff)) + geom_histogram(bins = 60) + coord_cartesian(xlim = c(-0.5, 0.5)) +
+  facet_wrap(~ label, nrow = 1) +
+  labs(caption = "Lower p-value results in higher differences (positive side)")
 
-## Truly Evaluating Solutions
+compared_pvalues %>%
+  dplyr::group_by(label) %>%
+  dplyr::summarise(n_same = sum(dplyr::between(diff, -0.1, 0.1)),
+                 n_better = sum(diff > 0.1),
+                 n_worse = sum(diff < -0.1))
+```
 
-To truly evaluate what we've done, we need to make sure of two things:
+So this doesn't seem like we are making substantive changes, because at the most of things that we are making better, we are **always making more worse**.
 
-  1. We are looking at correlation with peaks that have their rank adjusted, and then re-evaluated for median rank across samples
-  1. We look at some actual metrics. These include:
-    * The variance of normalized peaks using one of these corrections vs none vs median intensity normalization
-    * The change in p-values of cancer vs non-cancer using the various methods to correct
+### Different Normalization: Up To 90th
+
+We have one more suggestion from Hunter, and that is to take the 90th percentile, then take the previous 200 peaks, and sum those values, and use that for normalization.
+
+```{r normalize_90thsum}
+calc_ranknorm = function(values, ranks, sample, rank_cutoff = 0.9, n_peak = 200){
+  #message(sample[1])
+  match_rank = max(ranks[ranks <= rank_cutoff])
+  rank_index = which(ranks == match_rank)
+  if (rank_index < n_peak) {
+    n_peak = rank_index
+  }
+  use_values = seq(rank_index, rank_index - n_peak + 1, -1)
+  sum(values[use_values])
+}
+
+sum_org90 = lc_median_intensity %>%
+  dplyr::group_by(Sample) %>%
+  dplyr::arrange(fractional_rank) %>%
+  dplyr::summarise(Value = calc_ranknorm(Height, fractional_rank, Sample)) %>%
+  dplyr::left_join(., lc_median_intensity, by = "Sample") %>%
+  dplyr::mutate(HeightNorm = Height / Value) %>%
+  dplyr::group_by(imf, type) %>%
+  dplyr::summarise(mean = mean(HeightNorm),
+                   sd = sd(HeightNorm),
+                   rsd = sd / mean,
+                   which = "org_under90")
+sum_data90 = lc_median_intensity %>%
+  dplyr::group_by(Sample) %>%
+  dplyr::arrange(ratiofit_rank) %>%
+  dplyr::summarise(Value = calc_ranknorm(Height, fractional_rank, Sample)) %>%
+  dplyr::left_join(., lc_median_intensity, by = "Sample") %>%
+  dplyr::mutate(HeightNorm = Height / Value) %>%
+  dplyr::group_by(imf, type) %>%
+  dplyr::summarise(mean = mean(HeightNorm),
+                   sd = sd(HeightNorm),
+                   rsd = sd / mean,
+                   which = "fit_under90")
+
+more_rsd = rbind(nrank_rsd, mediannorm_rsd, raw_rsd, norm_close70_rsd, norm_close50_rsd,
+                sum_data90, sum_org90)
+more_rsd$which_type = paste0(more_rsd$type, "_", more_rsd$which)
+knitr::kable(dplyr::group_by(more_rsd, which_type) %>%
+  dplyr::summarise(mode = mode_value(rsd),
+                   height = mode_peak(rsd),
+                   fraction = mode_fraction(rsd)), digits = 2)
+ggplot(dplyr::filter(more_rsd, type %in% "non-cancer"), aes(x = rsd, y = which_type)) +
+  geom_density_ridges() + coord_cartesian(xlim = c(0, 2))
+```
+
+Now we are also going to try the analytical solution to correcting the ranks.
+
+```{r analytical_rsd}
+norm_lc90 = lc_median_intensity %>%
+  dplyr::group_by(Sample) %>%
+  dplyr::mutate(diff_90 = abs(lc_rank - 0.9)) %>%
+  dplyr::arrange(diff_90) %>%
+  dplyr::slice(1) %>%
+  dplyr::mutate(Value = Height)
+anal_data90 = dplyr::left_join(norm_lc90[, c("Sample", "Value")], lc_median_intensity) %>%
+  dplyr::mutate(HeightNorm = Height / Value) %>%
+  dplyr::group_by(imf, type) %>%
+  dplyr::summarise(mean = mean(HeightNorm),
+                   sd = sd(HeightNorm),
+                   rsd = sd / mean,
+                   which = "anal90")
+```
+
+```{r plot_them}
+new_rsd = rbind(anal_data90, mediannorm_rsd, dplyr::filter(nrank_rsd, which %in% "n90"),
+                sum_data90)
+new_rsd$which_type = paste0(new_rsd$type, "_", new_rsd$which)
+
+ggplot(dplyr::filter(new_rsd, type %in% "non-cancer"), aes(x = rsd, y = which_type)) +
+  geom_density_ridges() + coord_cartesian(xlim = c(0, 2))
+
+knitr::kable(dplyr::group_by(new_rsd, which_type) %>%
+  dplyr::summarise(mode = mode_value(rsd),
+                   height = mode_peak(rsd),
+                   fraction = mode_fraction(rsd)), digits = 2)
+```
+
+## Conclusions
+
+Well, we can **slightly** improve things over just using the **median** value, , and that can be done with the analytical solution, which is nice, we don't **need** the crazy fit using all of the data.
+However, it's not much of an improvement, so it seems like an awful lot of work to get the little bit of improvement.
+Finally, the idea of using the **sum** of peaks under the 90th percentile rank actually **made the RSD worse**, which given it didn't matter which ranks we used implies that is not actually a good idea.
+
