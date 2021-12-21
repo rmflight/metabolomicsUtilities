@@ -1,12 +1,11 @@
 Package: metabolomicsUtilities
 Type: Package
 Title: Provides useful functions for working with metabolomics data
-Version: 0.0.61
+Version: 0.0.62
 Authors@R: person("Robert", "Flight", , "rflight79@gmail.com", role =
         c("aut", "cre"))
 Date: 2021-12-21
-Description: More about what it does (maybe more than one line) Use
-        four spaces when indenting paragraphs within the Description.
+Description: Functionality for working with metabolomics data.
 Imports: IRanges, purrr, RColorBrewer, assertthat, broom, circlize,
         stats, stringr, visualizationQualityControl, magrittr, ade4
 License: BSD
