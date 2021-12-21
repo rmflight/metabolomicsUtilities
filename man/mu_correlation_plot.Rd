@@ -4,8 +4,13 @@
 \alias{mu_correlation_plot}
 \title{create correlation plot}
 \usage{
-mu_correlation_plot(matrix_data, groups = NULL, min_correlation = 0.5,
-  plot_title = "Sample Correlation", correlation_type = "global")
+mu_correlation_plot(
+  matrix_data,
+  groups = NULL,
+  min_correlation = 0.5,
+  plot_title = "Sample Correlation",
+  correlation_type = "global"
+)
 }
 \arguments{
 \item{matrix_data}{the matrix of data, variables by samples (r x c)}

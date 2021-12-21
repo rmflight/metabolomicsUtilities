@@ -4,8 +4,7 @@
 \alias{mu_cooccurence_distance}
 \title{get cooccurence distance}
 \usage{
-mu_cooccurence_distance(intensity_matrix, threshold_value = 0,
-  method = 2)
+mu_cooccurence_distance(intensity_matrix, threshold_value = 0, method = 2)
 }
 \arguments{
 \item{intensity_matrix}{matrix of intensity or propensity values}

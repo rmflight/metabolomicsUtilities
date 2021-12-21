@@ -4,10 +4,12 @@
 \alias{import_emf_classifications}
 \title{Import EMF Classifications}
 \usage{
-import_emf_classifications(classification_file,
-  remove_categories = list(Sphingolipids =
-  c("neutral glycosphingolipids", "acidic glycosphingolipids")),
-  fix_json = FALSE)
+import_emf_classifications(
+  classification_file,
+  remove_categories = list(Sphingolipids = c("neutral glycosphingolipids",
+    "acidic glycosphingolipids")),
+  fix_json = FALSE
+)
 }
 \arguments{
 \item{classification_file}{the file to read from}

@@ -4,8 +4,7 @@
 \alias{check_feature_class}
 \title{check class}
 \usage{
-check_feature_class(data, feature_column = "feature",
-  class_column = "class")
+check_feature_class(data, feature_column = "feature", class_column = "class")
 }
 \arguments{
 \item{data}{the data.frame to work on}

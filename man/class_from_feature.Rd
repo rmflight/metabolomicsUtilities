@@ -4,8 +4,14 @@
 \alias{class_from_feature}
 \title{create class from features}
 \usage{
-class_from_feature(data, in_column = "feature", new_column = "class",
-  sep = ".", n_sep = 10, position = 1)
+class_from_feature(
+  data,
+  in_column = "feature",
+  new_column = "class",
+  sep = ".",
+  n_sep = 10,
+  position = 1
+)
 }
 \arguments{
 \item{data}{the data.frame to use}

@@ -4,8 +4,14 @@
 \alias{mu_heatmap}
 \title{create a heatmap}
 \usage{
-mu_heatmap(matrix_data, title = "", groups = NULL,
-  transform = "none", min_value = 0, ...)
+mu_heatmap(
+  matrix_data,
+  title = "",
+  groups = NULL,
+  transform = "none",
+  min_value = 0,
+  ...
+)
 }
 \arguments{
 \item{matrix_data}{matrix of binary distances}

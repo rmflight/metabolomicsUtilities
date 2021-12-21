@@ -4,9 +4,14 @@
 \alias{vote_on_classifications}
 \title{vote on classifications}
 \usage{
-vote_on_classifications(category_list, return_opts = "max",
-  vote_threshold = 2/3 * 100, exclude_votes = c("not_lipid",
-  "unclassifiable", as.character(NA), "not_lipid or not_classified"))
+vote_on_classifications(
+  category_list,
+  return_opts = "max",
+  vote_threshold = 2/3 * 100,
+  exclude_votes = c("not_lipid", "unclassifiable", as.character(NA),
+    "not_lipid or not_classified"),
+  debug = FALSE
+)
 }
 \arguments{
 \item{category_list}{a named list of categories for each EMF}

@@ -84,3 +84,17 @@ check_feature_class <- function(data, feature_column = "feature", class_column =
   }
   data[!class_in_feature, ]
 }
+
+#' calculate mode
+#'
+#' Calculates the mode of a set of values
+#'
+#' @param values the values you want the first primary mode of
+#'
+#' @export
+#' @return numeric
+calculate_mode = function(values){
+  density_estimate = stats::density(values)
+  mode_value = density_estimate$x[which.max(density_estimate$y)]
+  mode_value
+}

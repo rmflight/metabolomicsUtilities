@@ -64,16 +64,20 @@ log_with_min <- function(data, min_value = NULL, order_mag = 3, log_fun = log){
 #'
 #' @export
 #' @return data.frame
-#' @importFrom FTMS.peakCharacterization zip_ms
 mu_peak_intensity = function(zip_file){
-  tmp_zip = zip_ms(zip_file)
-  tmp_zip$load_peak_finder()
-  tmp_zip$cleanup()
-  sample_id = tmp_zip$id
-  all_intensity = data.frame(intensity = tmp_zip$peak_finder$peak_regions$peak_data$Height,
-                             sample = sample_id,
-                             stringsAsFactors = FALSE)
-  all_intensity
+  if (require("FTMS.peakCharacterization")) {
+    tmp_zip = FTMS.peakCharacterization::zip_ms(zip_file)
+    tmp_zip$load_peak_finder()
+    tmp_zip$cleanup()
+    sample_id = tmp_zip$id
+    all_intensity = data.frame(intensity = tmp_zip$peak_finder$peak_regions$peak_data$Height,
+                               sample = sample_id,
+                               stringsAsFactors = FALSE)
+    return(all_intensity)
+  } else {
+    stop("FTMS.peakCharacterization is required for this functionality!")
+  }
+
 }
 
 #' calculate sample normalization
