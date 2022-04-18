@@ -1,13 +1,14 @@
 Package: metabolomicsUtilities
 Type: Package
 Title: Provides useful functions for working with metabolomics data
-Version: 0.0.62
+Version: 0.0.63
 Authors@R: person("Robert", "Flight", , "rflight79@gmail.com", role =
         c("aut", "cre"))
-Date: 2021-12-21
+Date: 2022-04-18
 Description: Functionality for working with metabolomics data.
 Imports: IRanges, purrr, RColorBrewer, assertthat, broom, circlize,
-        stats, stringr, visualizationQualityControl, magrittr, ade4
+        stats, stringr, visualizationQualityControl, magrittr, ade4,
+        readxl, dplyr
 Remotes: MoseleyBioinformaticsLab/visualizationQualityControl
 License: BSD
 Encoding: UTF-8
