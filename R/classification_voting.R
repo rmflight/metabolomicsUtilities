@@ -171,7 +171,10 @@ vote_categories_classes = function(categories_classes, emfs = "emf",
                                              exclude_votes = exclude_votes,
                                              debug = debug)
   voted_categories[[emfs]] = voted_categories$emf
-  voted_categories$emf = NULL
+  if (!(emfs %in% "emf")) {
+    voted_categories$emf = NULL
+  }
+
 
   split_voted = split(voted_categories$Voted, voted_categories[[emfs]])
   voted_categories_multiple = voted_to_multiple(voted_categories, split_by = emfs)
@@ -190,7 +193,10 @@ vote_categories_classes = function(categories_classes, emfs = "emf",
                                           exclude_votes = exclude_votes,
                                           debug = debug)
   voted_classes[[emfs]] = voted_classes$emf
-  voted_classes$emf = NULL
+  if (!(emfs %in% "emf")) {
+    voted_categories$emf = NULL
+  }
+
   voted_classes_multiple = voted_to_multiple(voted_classes, split_by = emfs)
 
   suffixes = paste0(".", c(categories, classes))
