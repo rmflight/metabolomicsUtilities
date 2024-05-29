@@ -1,15 +1,16 @@
 Package: metabolomicsUtilities
 Type: Package
 Title: Provides useful functions for working with metabolomics data
-Version: 0.0.65
+Version: 0.0.66
 Authors@R: person("Robert", "Flight", , "rflight79@gmail.com", role =
         c("aut", "cre"))
 Date: 2024-05-29
 Description: Functionality for working with metabolomics data.
 Imports: IRanges, purrr, RColorBrewer, assertthat, broom, circlize,
         stats, stringr, visualizationQualityControl, magrittr, ade4,
-        readxl, dplyr
-Remotes: MoseleyBioinformaticsLab/visualizationQualityControl
+        readxl, dplyr, ICIKendallTau
+Remotes: MoseleyBioinformaticsLab/visualizationQualityControl,
+        MoseleyBioinformaticsLab/ICIKendallTau
 License: BSD
 Encoding: UTF-8
 LazyData: true

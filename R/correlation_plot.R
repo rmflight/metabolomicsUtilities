@@ -9,16 +9,17 @@
 #' @param correlation_type whether to use globally or locally weighted correlation
 #'
 #' @export
-#' @importFrom visualizationQualityControl visqc_heatmap globally_it_weighted_pairwise_correlation visqc_heatmap similarity_reorderbyclass
+#' @importFrom visualizationQualityControl visqc_heatmap similarity_reorderbyclass
+#' @importFrom ICIKendallTau ici_kendalltau
 #' @importFrom RColorBrewer brewer.pal
 #' @importFrom circlize colorRamp2
 #' @return NULL
 mu_correlation_plot = function(matrix_data, groups = NULL, min_correlation = 0.5, plot_title = "Sample Correlation",
                                correlation_type = "global"){
   if (correlation_type == "global") {
-    data_cor = globally_it_weighted_pairwise_correlation(t(matrix_data), exclude_0 = TRUE, zero_value = min(matrix_data))
+    data_cor = ICIKendallTau::ici_kendalltau(matrix_data, global_na = c(NA, 0), perspective = "global")
   } else if (correlation_type == "local") {
-    data_cor = locally_it_weighted_pairwise_correlation(t(matrix_data), exclude_0 = TRUE, zero_value = min(matrix_data))
+    data_cor = ICIKendallTau::ici_kendalltau(matrix_data, global_na = c(NA, 0), perspective = "local")
   }
 
   na_entries = colSums(is.na(data_cor$cor))
