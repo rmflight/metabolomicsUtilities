@@ -153,6 +153,7 @@ mu_plot_up_down_classes = function(class_summary,
                                  ordered = TRUE)
   }
 
+  use_colors = c("pos" = "#F8766D", "neg" = "#00BFC4")
   max_val = max(abs(class_summary$n))
 
   y_lim = c(-1 * max_val, max_val)
@@ -160,7 +161,7 @@ mu_plot_up_down_classes = function(class_summary,
 
   out_plot = class_summary %>%
     ggplot(aes(x = value, y = n, fill = direction_char)) +
-    scale_fill_discrete() +
+    scale_fill_manual(values = use_colors) +
     geom_bar(stat = "identity") +
     geom_hline(color = "black", yintercept = 0) +
     coord_cartesian(ylim = y_lim) +
@@ -188,6 +189,8 @@ mu_plot_up_down_length_db = function(other_summary,
     other_summary = other_summary |>
       dplyr::filter(class %in% which_class)
   }
+
+  use_colors = c("pos" = "#F8766D", "neg" = "#00BFC4")
 
 
   other_summary$type = factor(other_summary$type, levels = c("total_length", "total_db", "chain_length", "chain_db"), ordered = TRUE)
@@ -225,7 +228,7 @@ mu_plot_up_down_length_db = function(other_summary,
       }
       out_plot = in_type %>%
         ggplot(aes(x = value, y = n, fill = direction_char)) +
-        scale_fill_discrete() +
+        scale_fill_manual(values = use_colors) +
         geom_bar(stat = "identity") +
         geom_hline(color = "black", yintercept = 0) +
         coord_cartesian(ylim = y_lim) +
